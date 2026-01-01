@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Mapbox + Three.js LoRaWAN Overlay</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.5.1/mapbox-gl.js"></script>
+  <script type="importmap">
+  {"imports":{
+    "three":"https://unpkg.com/three@0.160.0/build/three.module.js"
+  }}
+  </script>
+  <style>
+    html,body,#map{height:100%;margin:0}
+    .hud{position:fixed;top:10px;left:10px;background:rgba(16,22,35,.6);
+      color:#cfe3ff;padding:8px 10px;border-radius:8px;border:1px solid #ffffff22;
+      font:12px system-ui}
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="hud">Mapbox + Three custom layer • HKUST demo</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// 1) Mapbox map with terrain + buildings
+mapboxgl.accessToken = 'pk.eyJ1IjoiamltbXl3dWxvcmQiLCJhIjoiY2w3NmVhZXl3MjE4NzQxbjFtZDh5OHVvYSJ9.Mt5A_XNwyb_TEIWV3D73lQ';
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/standard',
+  center: [114.268, 22.336],         // ~HKUST
+  zoom: 15.6,
+  pitch: 70,
+  bearing: -25,
+  antialias: true
+});
+
+map.on('load', () => {
+  // Terrain
+  map.addSource('mapbox-dem', {
+    type: 'raster-dem',
+    url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+    tileSize: 512
+  });
+  map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.4 });
+
+  // 3D buildings
+  map.addLayer({
+    id: '3d-buildings',
+    type: 'fill-extrusion',
+    source: 'composite',
+    'source-layer': 'building',
+    minzoom: 14,
+    paint: {
+      'fill-extrusion-color': '#bfcad9',
+      'fill-extrusion-opacity': 0.9,
+      'fill-extrusion-height': ['coalesce', ['get','height'], 10],
+      'fill-extrusion-base': ['coalesce', ['get','min_height'], 0]
+    }
+  }, 'tunnel-street-minor-low'); // place under labels if you want
+
+  // 2) Three.js custom layer
+  const threeLayer = {
+    id: 'three-lorawan',
+    type: 'custom',
+    renderingMode: '3d',
+
+    onAdd(map, gl) {
+      // Shared renderer with Mapbox
+      this.renderer = new THREE.WebGLRenderer({
+        canvas: map.getCanvas(),
+        context: gl,
+        antialias: true
+      });
+      this.renderer.autoClear = false;
+
+      // Scene + camera (Mapbox will drive projection matrix each frame)
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.Camera();
+
+      // Lights
+      const hemi = new THREE.HemisphereLight(0x7aa1ff, 0x0b0f1a, 0.8);
+      const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+      dir.position.set(1, 2, 1);
+      this.scene.add(hemi, dir);
+
+      // Groups to organize
+      this.nodes = new THREE.Group();
+      this.gateways = new THREE.Group();
+      this.beams = new THREE.Group();
+      this.scene.add(this.nodes, this.gateways, this.beams);
+
+      // Materials
+      this.matNode = new THREE.MeshStandardMaterial({ color: 0x8ab4ff, emissive: 0x2b5dd1, emissiveIntensity: 1.2, metalness: 0.2, roughness: 0.3 });
+      this.matGw   = new THREE.MeshStandardMaterial({ color: 0xffb86b, emissive: 0x8a5320, emissiveIntensity: 1.0, metalness: 0.35, roughness: 0.35 });
+      this.SIZE_BOOST = 80; // multiply real-world size to make objects very large/visible
+
+      // Example: place one node + one gateway at real coords near HKUST,
+      // then draw a curved beam between them.
+      // IMPORTANT: with terrain enabled, altitude is relative to sea level.
+      // If you pass a small number (e.g., 5 m) your objects may be underground.
+      // Query the terrain elevation and add an offset so markers float above ground.
+      const nodeLL = [114.2659, 22.3366];
+      const gwLL   = [114.2698, 22.3379];
+      const nodeGround = map.queryTerrainElevation({ lng: nodeLL[0], lat: nodeLL[1] }, { exaggerated: true }) || 0;
+      const gwGround   = map.queryTerrainElevation({ lng: gwLL[0],   lat: gwLL[1]   }, { exaggerated: true }) || 0;
+      const node = this.addNode(nodeLL, nodeGround + 15);   // 15 m above terrain
+      const gw   = this.addGateway(gwLL,   gwGround   + 25); // 25 m above terrain
+      this.addBeam(node.position, gw.position, { snr: 8, rssi: -70 });
+
+      // Kick a tiny simulator (random beams across fixed endpoints)
+      this.startDemoBeams(node.position, gw.position);
+
+      // If you want a real websocket: hook here and call addNode/addGateway/addBeam per packet.
+      // this.ws = new WebSocket('ws://...');
+      // this.ws.onmessage = (e)=>{ const m = JSON.parse(e.data); ... }
+    },
+
+    // Convert lng/lat/alt (meters) to Mapbox's world units.
+    // Returns {x,y,z, scaleMetersToWorld}
+    toWorld(lng, lat, altitudeMeters=0) {
+      const mc = mapboxgl.MercatorCoordinate.fromLngLat({lng, lat}, altitudeMeters);
+      return { x: mc.x, y: mc.y, z: mc.z, scale: mc.meterInMercatorCoordinateUnits() };
+    },
+
+    // Add a spherical node
+    addNode(lnglat, alt=0) {
+      const {x,y,z,scale} = this.toWorld(lnglat[0], lnglat[1], alt);
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(4.5, 24, 24), this.matNode.clone());
+      mesh.position.set(x,y,z);
+      mesh.scale.setScalar(scale * this.SIZE_BOOST); // exaggerated size for visibility
+      this.nodes.add(mesh);
+      return mesh;
+    },
+
+    // Add a simple “mast” gateway
+    addGateway(lnglat, alt=0) {
+      const {x,y,z,scale} = this.toWorld(lnglat[0], lnglat[1], alt);
+      const g = new THREE.Group();
+      const mast = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.6 * this.SIZE_BOOST, 0.6 * this.SIZE_BOOST, 14 * this.SIZE_BOOST, 16),
+        this.matGw.clone()
+      );
+      mast.position.y = 7 * scale * this.SIZE_BOOST;
+      g.add(mast);
+      // ring “antennas” (also boosted)
+      const rmat = new THREE.MeshBasicMaterial({ color: 0xffd9a8, transparent: true, opacity: 0.9 });
+      const a1 = new THREE.Mesh(new THREE.TorusGeometry(2.6 * scale * this.SIZE_BOOST, 0.15 * scale * this.SIZE_BOOST, 12, 48), rmat);
+      a1.rotation.x = Math.PI / 2; a1.position.y = mast.position.y + 3.2 * scale * this.SIZE_BOOST; g.add(a1);
+      const a2 = new THREE.Mesh(new THREE.TorusGeometry(1.6 * scale * this.SIZE_BOOST, 0.15 * scale * this.SIZE_BOOST, 12, 48), rmat);
+      a2.rotation.x = Math.PI / 2; a2.position.y = mast.position.y + 1.4 * scale * this.SIZE_BOOST; g.add(a2);
+      g.position.set(x,y,z);
+      this.gateways.add(g);
+      return g;
+    },
+
+    // Radio viz helpers
+    snrToColor(snr){
+      const t = THREE.MathUtils.clamp((snr + 15) / 27, 0, 1);
+      const c = new THREE.Color();
+      if (t < 0.5){ const k=t/0.5; c.setRGB(1, 0.23 + 0.77*k, 0.23*(1-k)); }
+      else { const k=(t-0.5)/0.5; c.setRGB(1-0.7*k, 1, 0.23*(1-k)); }
+      return c;
+    },
+    rssiToWidth(rssi){
+      const t = THREE.MathUtils.clamp(((-rssi)-40)/(125-40), 0, 1);
+      return 0.3 + 2.7*(1-t);
+    },
+
+    // Tiny demo loop: spawn a beam every second between two fixed points
+    startDemoBeams(p1, p2){
+      this._demo = setInterval(()=>{
+        this.addBeam(p1, p2, { snr: -5 + Math.random()*20, rssi: -95 + Math.random()*25, persistSec: 3 });
+        map.triggerRepaint();
+      }, 1000);
+    },
+
+    // Mapbox drives this every frame
+    render(gl, matrix) {
+      // Sync Three camera with Mapbox
+      this.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix);
+
+      // Advance beams
+      const dt = 1/60;
+      if (this._beams){
+        for (const b of Array.from(this._beams)){
+          b.t += dt * b.speed;
+          const p = b.curve.getPointAt(Math.min(1, b.t));
+          b.particle.position.copy(p);
+          b.life -= dt;
+          const fade = Math.max(0, b.life / b.maxLife);
+          b.line.material.opacity = 0.15 + 0.85*fade;
+          b.particle.material.opacity = 0.35 + 0.65*fade;
+          if (b.t >= 1) { /* keep particle at end; it will fade */ }
+          if (b.life <= 0){
+            this.beams.remove(b.line); b.line.geometry.dispose(); b.line.material.dispose();
+            this.beams.remove(b.particle); b.particle.geometry.dispose(); b.particle.material.dispose();
+            this._beams.delete(b);
+          }
+        }
+      }
+
+      this.renderer.resetState();       // important when sharing GL context
+      this.renderer.render(this.scene, this.camera);
+      map.triggerRepaint();             // request next frame
+    },
+
+    onRemove() {
+      if (this._demo) clearInterval(this._demo);
+      this.renderer.dispose();
+    }
+  };
+
+  map.addLayer(threeLayer);
+});
+</script>
+</body>
+</html>

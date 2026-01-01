@@ -1,0 +1,1376 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>LoRaWAN Live 3D Traffic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body { margin:0; height:100%; background:#0b0f1a; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; color:#cfe3ff;}
+    #app { position:absolute; top:0; right:0; bottom:0; left:0; }
+    .hud {
+      position: fixed; top: 12px; left: 12px; background: rgba(16,22,35,.6);
+      padding: 10px 12px; border:1px solid rgba(255,255,255,.08); border-radius: 10px; backdrop-filter: blur(6px);
+      font-size: 12px; line-height: 1.4;
+    }
+    .panel {
+      position: fixed; top: 12px; right: 12px; background: rgba(16,22,35,.6);
+      padding: 12px; border:1px solid rgba(255,255,255,.08); border-radius: 10px; backdrop-filter: blur(6px);
+      width: 260px; font-size: 12px;
+    }
+    .panel h3 { margin:0 0 8px 0; font-size: 13px; letter-spacing:.3px; color:#a8c6ff }
+    .row { display:flex; gap:8px; align-items:center; margin:6px 0; }
+    .row label { width: 80px; color:#9fb6df; }
+    .row input[type="range"] { flex:1; }
+    .row input[type="text"], .row input[type="number"] { width: 100%; background:#0e1422; color:#cfe3ff; border:1px solid #23314f; border-radius:6px; padding:4px 6px;}
+    .btn {
+      display:inline-block; padding:6px 10px; border:1px solid #2b3b5f; border-radius:8px; background:#11192a; color:#cfe3ff; cursor:pointer;
+    }
+    .legend {
+      position: fixed; bottom: 12px; left: 12px; display:flex; gap:10px; align-items:center;
+      background: rgba(16,22,35,.6); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px 10px;
+    }
+    .grad { width:140px; height:10px; border-radius: 6px; background: linear-gradient(to right, #ff3b3b, #ffc23b, #2bff88); }
+    .grad-labels { display:flex; justify-content:space-between; font-size:10px; color:#9fb6df; margin-top:2px; }
+    a { color:#9bd0ff; text-decoration: none; }
+    /* --- Sidebar + Tabs Layout --- */
+    .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 220px; background:#0e1422; border-right:1px solid rgba(255,255,255,.08); padding: 16px 10px; box-sizing: border-box; }
+    /* --- Sidebar logo box --- */
+    .sidebar { padding-bottom: 88px; }
+    .logo-box { position:absolute; left:10px; right:10px; bottom:12px; background:#ffffff; border-radius:10px; padding:10px; display:flex; align-items:center; justify-content:center; box-shadow: 0 2px 10px rgba(0,0,0,.25); border:1px solid rgba(0,0,0,.08); }
+    .logo-box img { max-width:100%; max-height:48px; object-fit:contain; display:block; }
+    .brand { display:flex; align-items:center; gap:10px; margin-bottom: 16px; color:#cfe3ff; font-weight:600; letter-spacing:.2px; }
+    .brand svg { width:22px; height:22px; }
+    .nav { display:flex; flex-direction:column; gap:10px; }
+    .nav button { display:flex; align-items:center; gap:12px; width:100%; padding:14px 14px; background:#11192a; color:#cfe3ff; border:1px solid #2b3b5f; border-radius:12px; cursor:pointer; text-align:left; font-size:15px; line-height:1.25; min-height:56px; }
+    .nav button[aria-selected="true"] { background:#16223a; border-color:#3a5285; box-shadow: 0 0 0 1px rgba(155,208,255,0.08) inset; }
+    .nav button svg { width:22px; height:22px; opacity:.95; }
+    .content { position: fixed; top:0; left:220px; right:0; bottom:0; }
+    .tab-section { position:absolute; inset:0; display:none; }
+    .tab-section.active { display:block; }
+    /* Adjust existing floating panels to avoid sidebar overlap */
+    .hud { left: 232px; }
+    .legend { left: 232px; }
+    /* --- Live terminal stream (left of 3D) --- */
+    #tab-live.has-terminal #app { left: 380px; }
+    .term {
+      position: fixed; top: 12px; left: 232px; bottom: 12px; width: 360px; z-index: 2;
+      background: rgba(10,16,28,.78); border:1px solid rgba(155,208,255,.12); border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.3); backdrop-filter: blur(6px);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color:#a5ffbf; overflow: hidden;
+    }
+    .term-header { display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.06); color:#9bd0ff; font-size:12px; }
+    .term-body { position:absolute; inset:38px 0 0 0; overflow:auto; padding:8px 10px; }
+    .term-body::-webkit-scrollbar { width:8px; }
+    .term-body::-webkit-scrollbar-thumb { background:#23314f; border-radius:8px; }
+    .term-line { white-space: nowrap; font-size:12px; line-height:1.35; letter-spacing:.2px; padding:2px 0; opacity:.95; animation: slideIn .18s ease-out; }
+    .term-dim { opacity:.7; color:#7bd19b; }
+    .term-warn { color:#ffd27a; }
+    .term-err { color:#ff9b9b; }
+    .term-time { color:#7fb6ff; margin-right:6px; }
+    .term-kv { color:#c6ffdd; }
+    .term-scan {
+      pointer-events:none; position:absolute; inset:0; mix-blend-mode:overlay; opacity:.08;
+      background: repeating-linear-gradient(180deg, #fff 0, #fff 1px, transparent 2px, transparent 4px);
+    }
+    @keyframes slideIn { from { transform: translateX(-10px); opacity: .0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* --- Live top KPIs (right of terminal) --- */
+    .live-kpis { position: fixed; top:12px; left: 604px; right: 284px; z-index: 2; display:grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap:12px; }
+    .live-kpi { background:#11192a; border:1px solid #2b3b5f; border-radius:12px; padding:10px 12px; min-height:56px; display:flex; flex-direction:column; justify-content:center; }
+    .live-kpi .lbl { font-size:12px; color:#9fb6df; letter-spacing:.2px; margin-bottom:4px; }
+    .live-kpi .val { font-size:22px; font-weight:600; letter-spacing:.3px; color:#cfe3ff; }
+    @media (max-width: 1200px){ .live-kpis{ display:none; } }
+    .panel { right: 12px; }
+    /* The 3D canvas container fills the live tab area */
+    #tab-live { position: absolute; inset:0; }
+    #app { position:absolute; inset:0; }
+    /* --- Overview Dashboard --- */
+    .dash-wrap { padding:24px; color:#cfe3ff; }
+    .kpis { display:grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap:12px; margin-bottom:16px; }
+    .kpi { background:#11192a; border:1px solid #2b3b5f; border-radius:12px; padding:12px; }
+    .kpi .label { font-size:12px; color:#9fb6df; letter-spacing:.2px; margin-bottom:6px; }
+    .kpi .value { font-size:22px; font-weight:600; letter-spacing:.3px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .card { background:#11192a; border:1px solid #2b3b5f; border-radius:12px; padding:12px; min-height:240px; }
+    .card h3 { margin:0 0 10px 0; font-size:14px; color:#a8c6ff; letter-spacing:.2px; }
+    .table { width:100%; border-collapse: collapse; font-size:12px; }
+    .table th, .table td { padding:8px; border-bottom:1px solid #223051; text-align:left; }
+    .table th { color:#9fb6df; font-weight:600; }
+    .table tbody tr:hover { background:#0e1422; }
+    .table th.sortable { cursor:pointer; position:relative; }
+    .table th.sortable::after { content:""; position:absolute; right:8px; top:50%; width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid #9fb6df; transform: translateY(-2px); opacity:.6; }
+    .table th.sortable.asc::after { border-top:none; border-bottom:6px solid #9fb6df; transform: translateY(-4px); }
+    .filter-row input { width:100%; background:#0e1422; color:#cfe3ff; border:1px solid #23314f; border-radius:6px; padding:4px 6px; font-size:11px; }
+    .bar-row { display:flex; align-items:center; gap:8px; }
+    .bar-rail { flex:1; height:8px; background:#0e1422; border-radius:999px; border:1px solid #23314f; overflow:hidden; }
+    .bar-fill { height:100%; width:0%; background:linear-gradient(90deg,#4fa3ff,#6bffe0); }
+    .muted { color:#9fb6df; opacity:.9; }
+    .badge { display:inline-block; padding:2px 6px; border-radius:999px; border:1px solid #2b3b5f; background:#0e1422; font-size:11px; }
+
+    /* --- Set & Watch Layout --- */
+    .watch-wrap { padding:24px; color:#cfe3ff; display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    .watch-col { background:#11192a; border:1px solid #2b3b5f; border-radius:12px; padding:16px; }
+    .watch-title { display:flex; align-items:center; gap:10px; margin:0 0 12px 0; color:#a8c6ff; letter-spacing:.2px; }
+    .watch-title svg { width:22px; height:22px; }
+    .watch-controls { display:grid; grid-template-columns: 1fr 180px auto; gap:8px; margin-bottom:12px; }
+    .watch-controls input, .watch-controls select { background:#0e1422; color:#cfe3ff; border:1px solid #23314f; border-radius:8px; padding:6px 8px; font-size:12px; }
+    .watch-controls button { padding:6px 10px; border:1px solid #2b3b5f; border-radius:8px; background:#0f1728; color:#cfe3ff; cursor:pointer; }
+    .watch-table { width:100%; border-collapse: collapse; font-size:12px; }
+    .watch-table th, .watch-table td { padding:8px; border-bottom:1px solid #223051; text-align:left; }
+    .watch-table th { color:#9fb6df; font-weight:600; }
+    .empty-hint { color:#9fb6df; opacity:.8; padding:12px 0; }
+
+    /* gradient mini-graphs */
+    .gcell { display:flex; align-items:center; gap:8px; }
+    .gbar { flex:1; height:8px; background:#0e1422; border-radius:999px; border:1px solid #23314f; overflow:hidden; }
+    .gfill { height:100%; width:0%; background:linear-gradient(90deg,#ff3b3b,#ffc23b,#2bff88); }
+    .gval { min-width:64px; text-align:right; color:#cfe3ff; opacity:.95; }
+    /* --- UAV Monitoring: Under Development --- */
+    .underdev-wrap { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:28px; }
+    .underdev-card { width:min(880px, 92vw); background:linear-gradient(135deg, rgba(18,26,43,.85), rgba(13,19,34,.85)); border:1px solid rgba(155,208,255,.12); border-radius:18px; box-shadow: 0 12px 36px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,0,0,.25); padding:24px; position:relative; overflow:hidden; }
+    .underdev-card:before { content:""; position:absolute; inset:-2px; background: radial-gradient(600px 200px at 0% 0%, rgba(79,163,255,.18), transparent 45%), radial-gradient(600px 200px at 100% 100%, rgba(107,255,224,.12), transparent 45%); pointer-events:none; }
+    .underdev-head { display:flex; gap:16px; align-items:center; margin-bottom:12px; }
+    .underdev-icon { width:60px; height:60px; border-radius:14px; border:1px solid rgba(155,208,255,.14); background:linear-gradient(180deg,#0f1730,#0b1226); display:grid; place-items:center; box-shadow: inset 0 0 24px rgba(79,163,255,.15); }
+    .underdev-icon svg { width:34px; height:34px; opacity:.95; }
+    .underdev-title { display:flex; align-items:baseline; gap:10px; }
+    .underdev-title h2 { margin:0; font-size:22px; letter-spacing:.3px; color:#a8c6ff; }
+    .pill-wip { display:inline-block; font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid #3a5285; background:#0f1728; color:#9bd0ff; }
+    .underdev-sub { margin:6px 0 14px 0; color:#cfe3ff; opacity:.9; }
+    .underdev-grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:16px; }
+    @media (max-width: 860px){ .underdev-grid{ grid-template-columns: 1fr; } }
+    .underdev-left, .underdev-right { background:#11192a; border:1px solid #2b3b5f; border-radius:12px; padding:14px; }
+    .feat-list { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:6px; }
+    @media (max-width: 680px){ .feat-list{ grid-template-columns: 1fr; } }
+    .feat { background:#0e1422; border:1px solid #23314f; border-radius:10px; padding:10px; display:flex; gap:10px; align-items:flex-start; }
+    .feat svg { width:20px; height:20px; opacity:.95; }
+    .skeleton { position:relative; overflow:hidden; background:#0e1422; border:1px solid #23314f; border-radius:10px; height:140px; }
+    .skeleton .bar { height:10px; width:60%; margin:14px; background:#15213a; border-radius:999px; }
+    .skeleton .bar.small { width:40%; }
+    .shimmer { position:absolute; inset:0; background: linear-gradient(90deg, transparent, rgba(155,208,255,.08), transparent); transform: translateX(-100%); animation: shimmer 2.2s infinite; }
+    @keyframes shimmer { to { transform: translateX(100%); } }
+    .coming-note { font-size:12px; color:#9fb6df; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" role="navigation" aria-label="Main">
+    <div class="brand">
+      <!-- globe/grid icon -->
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18 9 9 0 000-18z" stroke="#9fb6df" stroke-width="1.5"/><path d="M12 3c2.5 2.4 4 5.33 4 9s-1.5 6.6-4 9c-2.5-2.4-4-5.33-4-9s1.5-6.6 4-9z" stroke="#9fb6df" stroke-width="1.5"/><path d="M3 12h18M12 3v18" stroke="#9fb6df" stroke-width="1.2" opacity=".7"/></svg>
+      <span>HKUST LoRaWAN</span>
+    </div>
+    <div class="nav" id="navTabs">
+      <button class="tablink" data-tab="overview" aria-selected="true">
+        <!-- overview icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v7H4z" stroke="#a8c6ff" stroke-width="1.5"/></svg>
+        <span>Overview</span>
+      </button>
+      <button class="tablink" data-tab="live">
+        <!-- live traffic icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><path d="M3 12c0-2.5 1-4.77 2.64-6.4M21 12c0 2.5-1 4.77-2.64 6.4M7 12c0-1.6.65-3.05 1.7-4.1M17 12c0 1.6-.65 3.05-1.7 4.1M10.5 12a1.5 1.5 0 103 0 1.5 1.5 0 10-3 0z" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Live Traffic</span>
+      </button>
+      <button class="tablink" data-tab="watch">
+        <!-- watch/target icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><circle cx="12" cy="12" r="7" stroke="#a8c6ff" stroke-width="1.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M12 9v6M9 12h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Set & Watch</span>
+      </button>
+      <button class="tablink" data-tab="uav">
+        <!-- drone icon -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><path d="M8 12a4 4 0 118 0 4 4 0 11-8 0z" stroke="#a8c6ff" stroke-width="1.5"/><path d="M2 7h6M16 7h6M2 17h6M16 17h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/><path d="M4 7l3 3M20 7l-3 3M4 17l3-3M20 17l-3-3" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>UAV Monitoring</span>
+      </button>
+    </div>
+    <div class="logo-box" aria-label="WANDS logo">
+      <img src="WANDS_Logo.svg" alt="WANDS Logo" />
+    </div>
+  </aside>
+
+  <!-- Main content area with tab sections -->
+  <main class="content">
+    <!-- Tab 1: Overview -->
+    <section class="tab-section active" id="tab-overview" role="region" aria-label="Overview">
+      <div class="dash-wrap">
+        <h2 style="margin:0 0 12px 0; letter-spacing:.3px; color:#a8c6ff">Overview</h2>
+        <div class="kpis">
+          <div class="kpi"><div class="label">Live traffic (pps)</div><div class="value" id="kpiPPS">0</div></div>
+          <div class="kpi"><div class="label">Live messages (total)</div><div class="value" id="kpiTotal">0</div></div>
+          <div class="kpi"><div class="label">Registered devices</div><div class="value" id="kpiDevices">2231</div></div>
+          <div class="kpi"><div class="label">Registered gateways</div><div class="value" id="kpiGateways">98</div></div>
+          <div class="kpi"><div class="label">Max duplication (current)</div><div class="value" id="kpiDup">0×</div></div>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h3>Gateway load</h3>
+            <table class="table" id="tblGateway">
+              <thead>
+  <tr>
+    <th class="sortable" data-key="gateway">Gateway</th>
+    <th class="sortable" data-key="unique_node_count">Unique Nodes</th>
+    <th class="sortable" data-key="serving_node_count">Serving Nodes</th>
+    <th>Load</th>
+  </tr>
+  <tr class="filter-row">
+    <th><input id="gwFilterText" placeholder="Filter gateway"></th>
+    <th><input id="gwFilterMinUnique" type="number" placeholder=">= 0"></th>
+    <th><input id="gwFilterMinServing" type="number" placeholder=">= 0"></th>
+    <th></th>
+  </tr>
+</thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Node message distribution</h3>
+            <table class="table" id="tblNodes">
+              <thead>
+  <tr>
+    <th class="sortable" data-key="dev">DevEui</th>
+    <th class="sortable" data-key="prr">PRR</th>
+    <th class="sortable" data-key="total">Total</th>
+    <th class="sortable" data-key="updf">updf</th>
+    <th class="sortable" data-key="upinfo">upinfo</th>
+  </tr>
+  <tr class="filter-row">
+    <th><input id="nodeFilterText" placeholder="Filter DevEUI"></th>
+    <th><input id="nodeFilterMinPRR" type="number" step="0.1" placeholder=">= 0"></th>
+    <th><input id="nodeFilterMinTotal" type="number" placeholder=">= 0"></th>
+    <th></th>
+    <th></th>
+  </tr>
+</thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Live Traffic (3D) -->
+    <section class="tab-section has-terminal" id="tab-live" role="region" aria-label="Live Traffic">
+      <div class="term" id="term">
+        <div class="term-header">RAW TRAFFIC • <span style="opacity:.75">live stream</span></div>
+        <div class="term-body" id="termStream"></div>
+        <div class="term-scan"></div>
+      </div>
+      <div class="live-kpis" aria-label="Live KPIs">
+        <div class="live-kpi"><div class="lbl">Packets/sec</div><div class="val" id="livePPS">0</div></div>
+        <div class="live-kpi"><div class="lbl">Messages (total)</div><div class="val" id="liveTotal">0</div></div>
+        <div class="live-kpi"><div class="lbl">Active devices</div><div class="val" id="liveDevices">0</div></div>
+        <div class="live-kpi"><div class="lbl">Active gateways</div><div class="val" id="liveGateways">0</div></div>
+        <div class="live-kpi"><div class="lbl">Max duplication</div><div class="val" id="liveDup">0×</div></div>
+      </div>
+      <div id="app"></div>
+      <div class="hud" id="hud">
+        <div><b>LoRaWAN Live 3D</b></div>
+        <div>Packets/sec: <span id="pps">0</span></div>
+        <div>Active beams: <span id="beams">0</span></div>
+        <div>Devices: <span id="devices">0</span> · Gateways: <span id="gws">0</span></div>
+        <div>WS: <span id="wsStatus">disconnected</span></div>
+      </div>
+      <div class="panel">
+        <h3>Controls</h3>
+        <div class="row"><label>WebSocket</label><input id="wsUrl" type="text" value="ws://loranet01.ust.hk:7002/owner-c::2"></div>
+        <div class="row">
+          <button class="btn" id="connectBtn">Connect</button>
+          <button class="btn" id="pauseBtn">Pause</button>
+        </div>
+        <div class="row"><label>Speed</label><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"></div>
+        <div class="row"><label>Persist</label><input id="persist" type="range" min="0.5" max="8" step="0.5" value="3"></div>
+        <div class="row"><label>Min SNR</label><input id="minSnr" type="number" value="-15" step="0.25"></div>
+        <div class="row"><label>FPort</label><input id="fport" type="text" placeholder="e.g. 1,5,8 or blank"></div>
+        <div class="row"><label>DR</label><input id="dr" type="text" placeholder="e.g. 0,2,5 or blank"></div>
+        <div class="row"><label>Orbit</label><button class="btn" id="orbitBtn">Start</button></div>
+        <div class="row"><small>Tip: thickness by RSSI, color by SNR. Curves target heard gateways from <code>upinfo</code> or <code>updf</code> origin.</small></div>
+      </div>
+      <div class="legend">
+        <div>
+          <div style="font-size:12px;color:#9fb6df">SNR color map</div>
+          <div class="grad"></div>
+          <div class="grad-labels"><span>-15 dB</span><span>0</span><span>+12 dB</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Set & Watch -->
+    <section class="tab-section" id="tab-watch" role="region" aria-label="Set and Watch">
+      <div class="watch-wrap">
+        <!-- Left: Node Watch -->
+        <div class="watch-col">
+          <h2 class="watch-title">
+            <!-- node icon -->
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><circle cx="12" cy="12" r="5" stroke="#a8c6ff" stroke-width="1.5"/><path d="M2 7h6M16 7h6M2 17h6M16 17h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <span>Node Watch</span>
+          </h2>
+          <div class="watch-controls">
+            <input id="watchDevInput" type="text" placeholder="Enter DevEUI (or pick)" />
+            <select id="nodeList"></select>
+            <button id="watchDevBtn">Set</button>
+            <button id="watchDevPause" aria-pressed="false">Pause</button>
+          </div>
+          <table class="watch-table" id="tblWatchNode">
+            <thead><tr><th>Gateway</th><th>SNR (dB)</th><th>RSSI (dBm)</th><th>Last seen</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="empty-hint" id="nodeEmpty" style="display:none">No data yet. Pick an active node from the list above.</div>
+        </div>
+
+        <!-- Right: Gateway Watch -->
+        <div class="watch-col">
+          <h2 class="watch-title">
+            <!-- gateway tower icon -->
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none"><path d="M12 3v7m0 0l-3 4m3-4l3 4M6 21h12" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/><path d="M4 9c2.5-2.5 5.5-4 8-4s5.5 1.5 8 4M6 12c1.7-1.7 3.7-2.7 6-2.7s4.3 1 6 2.7" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <span>Gateway Watch</span>
+          </h2>
+          <div class="watch-controls">
+            <input id="watchGwInput" type="text" placeholder="Enter Gateway ID (or pick)" />
+            <select id="gwList"></select>
+            <button id="watchGwBtn">Set</button>
+            <button id="watchGwPause" aria-pressed="false">Pause</button>
+          </div>
+          <table class="watch-table" id="tblWatchGw">
+            <thead><tr><th>Node (DevEUI)</th><th>SNR (dB)</th><th>RSSI (dBm)</th><th>Last seen</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="empty-hint" id="gwEmpty" style="display:none">No data yet. Pick an active gateway from the list above.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: UAV Monitoring -->
+    <section class="tab-section" id="tab-uav" role="region" aria-label="UAV Monitoring">
+      <div class="underdev-wrap">
+        <div class="underdev-card" role="status" aria-live="polite">
+          <div class="underdev-head">
+            <div class="underdev-icon" aria-hidden="true">
+              <!-- Simple drone/gear icon -->
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 12a4 4 0 118 0 4 4 0 11-8 0z" stroke="#a8c6ff" stroke-width="1.3"/>
+                <path d="M2 7h6M16 7h6M2 17h6M16 17h6" stroke="#a8c6ff" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M4 7l3 3M20 7l-3 3M4 17l3-3M20 17l-3-3" stroke="#a8c6ff" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="underdev-title">
+              <h2>UAV Monitoring</h2>
+              <span class="pill-wip">Under development</span>
+            </div>
+          </div>
+          <div class="underdev-sub">We're crafting a live telemetry dashboard with map views, flight status, and alerting. Here's a peek at what's coming.</div>
+
+          <div class="underdev-grid">
+            <div class="underdev-left">
+              <h3 style="margin:0 0 8px 0; font-size:14px; color:#a8c6ff">Preview</h3>
+              <div class="skeleton">
+                <div class="bar"></div>
+                <div class="bar small"></div>
+                <div class="bar" style="width:72%"></div>
+                <div class="shimmer"></div>
+              </div>
+              <div class="coming-note">Mock layout • Map + timeline + status pills</div>
+            </div>
+            <div class="underdev-right">
+              <h3 style="margin:0 0 8px 0; font-size:14px; color:#a8c6ff">Planned modules</h3>
+              <div class="feat-list">
+                <div class="feat">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v20M2 12h20" stroke="#9bd0ff" stroke-width="1.4" stroke-linecap="round"/></svg>
+                  <div><div style="font-weight:600">Live Telemetry</div><div class="muted">GPS, battery, modes, and health in real time.</div></div>
+                </div>
+                <div class="feat">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 11l6-6 6 6-6 6-6-6zM15 5l6 6-6 6" stroke="#9bd0ff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <div><div style="font-weight:600">Map & Path</div><div class="muted">Mission route, geofence, and home position.</div></div>
+                </div>
+                <div class="feat">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#9bd0ff" stroke-width="1.4"/><path d="M12 7v5l3 3" stroke="#9bd0ff" stroke-width="1.4" stroke-linecap="round"/></svg>
+                  <div><div style="font-weight:600">Alerts & Logs</div><div class="muted">Mode changes, failsafes, and event timeline.</div></div>
+                </div>
+              </div>
+              <div class="coming-note">Clean, minimal UI consistent with the dashboard style.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const container = document.getElementById('app');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 80, 210);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0x7aa1ff, 0x0b0f1a, 0.6));
+    const dir = new THREE.DirectionalLight(0xb1c8ff, 0.8);
+    dir.position.set(100, 200, 100);
+    scene.add(dir);
+
+
+    // Starfield
+    const starsGeo = new THREE.BufferGeometry();
+    const starCnt = 1500;
+    const starPos = new Float32Array(starCnt * 3);
+    for (let i = 0; i < starCnt; i++) {
+      const r = 800 * Math.cbrt(Math.random());
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      starPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i*3+1] = r * Math.cos(phi);
+      starPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const stars = new THREE.Points(starsGeo, new THREE.PointsMaterial({ size: 1, sizeAttenuation: true, color: 0x385a94, fog: false }));
+    scene.add(stars);
+
+    // Rings
+    const rings = new THREE.Group();
+    scene.add(rings);
+    for (let i=0;i<3;i++){
+      const g = new THREE.RingGeometry(70+i*20-0.5,70+i*20+0.5, 128);
+      const m = new THREE.MeshBasicMaterial({ color: 0x1e2c49, side: THREE.DoubleSide, transparent:true, opacity:0.4 });
+      const ring = new THREE.Mesh(g,m); ring.rotation.x = -Math.PI/2; rings.add(ring);
+    }
+
+    // --- Hover picking for labels ---
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let hoveredGroup = null;
+    const pickables = [];
+    function setGroupLabelVisible(group, visible){
+      if (!group) return;
+      const sprite = group.children.find(c => c.isSprite);
+      if (sprite) sprite.visible = visible;
+    }
+    renderer.domElement.addEventListener('mousemove', (e)=>{
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    });
+
+    const devices = new Map();
+    const gateways = new Map();
+
+    // --- Activity stats for Set & Watch ---
+    const devStats = new Map();    // devEui -> { count: number, byGw: Map(routerid, {snr, rssi, t}) }
+    const gwStats  = new Map();    // routerid -> { count: number, byDev: Map(devEui, {snr, rssi, t}) }
+
+    // --- Ring layout (devices on inner ring, gateways on outer ring) ---
+    const R_DEV = 80;   // radius for devices ring
+    const R_GW  = 120;  // radius for gateways ring (outside devices)
+
+    function ringPosition(index, total, radius, y = 0, phase = 0){
+      const angle = (index / Math.max(1, total)) * Math.PI * 2 + phase;
+      return new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+    }
+
+    let relayoutDirty = false;
+    function relayout(){
+      // Devices on inner ring
+      let i = 0;
+      const totalD = devices.size || 1;
+      for (const g of devices.values()){
+        const target = ringPosition(i++, totalD, R_DEV, 0, 0);
+        if (!g.userData.targetPos) g.userData.targetPos = g.position.clone();
+        g.userData.targetPos.copy(target);
+      }
+      // Gateways on outer ring (phase-shifted a bit to avoid aligning exactly with devices)
+      i = 0;
+      const totalG = gateways.size || 1;
+      for (const g of gateways.values()){
+        const target = ringPosition(i++, totalG, R_GW, 0, Math.PI/totalG);
+        if (!g.userData.targetPos) g.userData.targetPos = g.position.clone();
+        g.userData.targetPos.copy(target);
+      }
+    }
+
+    // Materials (brighter)
+    const deviceMatTpl = new THREE.MeshStandardMaterial({ color: 0x8ab4ff, emissive: 0x2b5dd1, emissiveIntensity: 1.2, metalness: 0.2, roughness: 0.3 });
+    const gatewayMatTpl = new THREE.MeshStandardMaterial({ color: 0xffb86b, emissive: 0x8a5320, emissiveIntensity: 1.0, metalness: 0.2, roughness: 0.35 });
+
+    function getGatewayNode(routerid){
+      if (!gateways.has(routerid)){
+        const group = new THREE.Group();
+
+        // Mast
+        const mastGeo = new THREE.CylinderGeometry(0.6, 0.6, 12, 16);
+        const mastMat = new THREE.MeshStandardMaterial({ color: 0xffc58a, emissive: 0x8a5320, emissiveIntensity: 1.0, metalness: 0.45, roughness: 0.25 });
+        const mast = new THREE.Mesh(mastGeo, mastMat);
+        mast.position.y = 6;
+        group.add(mast);
+
+        // Antenna rings (like sector antennas)
+        const ring1 = new THREE.TorusGeometry(2.6, 0.15, 12, 48);
+        const ring2 = new THREE.TorusGeometry(1.6, 0.15, 12, 48);
+        const rmat = new THREE.MeshBasicMaterial({ color: 0xffd9a8, transparent:true, opacity:0.9 });
+        const a1 = new THREE.Mesh(ring1, rmat); a1.rotation.x = Math.PI/2; a1.position.y = mast.position.y + 3.2; group.add(a1);
+        const a2 = new THREE.Mesh(ring2, rmat); a2.rotation.x = Math.PI/2; a2.position.y = mast.position.y + 1.5; group.add(a2);
+
+        // Beacon LED
+        const ledGeo = new THREE.SphereGeometry(0.6, 16, 16);
+        const ledMat = new THREE.MeshBasicMaterial({ color: 0xffa64d });
+        const led = new THREE.Mesh(ledGeo, ledMat);
+        led.position.y = mast.position.y + 5.2;
+        group.add(led);
+
+        // Store core mesh for flash effect and picking
+        group.userData.coreMesh = mast;
+        mast.userData.baseEm = (mast.material && mast.material.emissiveIntensity) || 1.0;
+        pickables.push(mast);
+
+        const sprite = makeTextSprite(`Gateway: ${shortRouter(routerid)}`, { fontSize: 52, color: '#ffc97a' });
+        sprite.position.set(0, 12, 0);
+        sprite.visible = false;
+        group.add(sprite);
+
+        group.userData.kind = 'gateway';
+
+        // temporary initial placement near origin; layout will animate it out
+        group.position.set(0, 0, 0);
+        group.userData.targetPos = group.position.clone();
+        scene.add(group);
+        gateways.set(routerid, group);
+        updateCounts();
+        relayoutDirty = true;
+      }
+      return gateways.get(routerid);
+    }
+
+    function getDeviceNode(devEui){
+      if (!devices.has(devEui)){
+        const group = new THREE.Group();
+        const geo = new THREE.SphereGeometry(2.2, 24, 24);
+        const mesh = new THREE.Mesh(geo, deviceMatTpl.clone());
+        mesh.material.emissiveIntensity = 1.35;
+        group.add(mesh);
+        group.userData.coreMesh = mesh;
+        mesh.userData.baseEm = mesh.material.emissiveIntensity;
+
+        const sprite = makeTextSprite(`Node: ${shortDev(devEui)}`, { fontSize: 52, color: '#a9c7ff' });
+        sprite.position.set(0, 8, 0);
+        sprite.visible = false;
+        group.add(sprite);
+
+        group.userData.kind = 'node';
+
+        // temporary initial placement near origin; layout will animate it out
+        group.position.set(0, 0, 0);
+        group.userData.targetPos = group.position.clone();
+        scene.add(group);
+        devices.set(devEui, group);
+        updateCounts();
+        relayoutDirty = true;
+      }
+      return devices.get(devEui);
+    }
+
+    function shortDev(dev){ return dev?.slice(-8) ?? 'device'; }
+    function shortRouter(r){ return String(r).slice(-6); }
+
+    // Flash effect
+    const flashes = new Set();
+    function flashNode(group){
+      const mesh = group.userData.coreMesh;
+      if (!mesh) return;
+      const base = mesh.userData.baseEm ?? 1.0;
+      const peak = base + 1.0;
+      const dur = 0.6;
+      const eff = { mesh, base, peak, t: 0, dur };
+
+      const ringGeo = new THREE.RingGeometry(0.1, 0.65, 48);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x9ec3ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, fog: false });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI/2;
+      ring.position.set(0, 0.05, 0);
+      group.add(ring);
+      eff.ring = ring;
+      flashes.add(eff);
+    }
+
+    // Beams
+    const beams = new Set();
+    const tmpColor = new THREE.Color();
+    function snrToColor(snr){
+      const t = THREE.MathUtils.clamp((snr + 15) / 27, 0, 1);
+      if (t < 0.5){
+        const k = t/0.5;
+        tmpColor.setRGB(1, 0.23 + 0.77*k, 0.23*(1-k));
+      } else {
+        const k = (t-0.5)/0.5;
+        tmpColor.setRGB(1 - 0.7*k, 1, 0.23*(1-k));
+      }
+      return tmpColor.clone();
+    }
+    function rssiToWidth(rssi){
+      const t = THREE.MathUtils.clamp(((-rssi) - 40) / (125-40), 0, 1);
+      return 0.3 + 2.7*(1-t);
+    }
+    function spawnBeam(fromObj, toObj, snr, rssi, persistSec){
+      const a = fromObj.position.clone();
+      const b = toObj.position.clone();
+      const mid = a.clone().add(b).multiplyScalar(0.5);
+      const dist = a.distanceTo(b);
+      mid.y += 10 + 0.25 * dist;
+      const curve = new THREE.CatmullRomCurve3([a, mid, b]);
+      const points = curve.getPoints(64);
+      const pos = new Float32Array(points.length * 3);
+      for (let i=0;i<points.length;i++){ pos[i*3]=points[i].x; pos[i*3+1]=points[i].y; pos[i*3+2]=points[i].z; }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos,3));
+      const w = rssiToWidth(rssi);
+      const m = new THREE.LineBasicMaterial({ color: snrToColor(snr), transparent:true, opacity:1.0, fog: false }); // fully visible, ignore fog
+      const line = new THREE.Line(g, m);
+      scene.add(line);
+      const pGeo = new THREE.SphereGeometry(w*0.25, 12, 12);
+      const pMat = new THREE.MeshBasicMaterial({ color: snrToColor(snr), fog: false });
+      const particle = new THREE.Mesh(pGeo, pMat);
+      particle.scale.set(1.6, 1.6, 1.6);
+      particle.position.copy(a);
+      scene.add(particle);
+      const beam = { line, particle, curve, t: 0, speed: 0.6 * Number(speedEl.value), life: persistSec, maxLife: persistSec };
+      beams.add(beam);
+      updateCounts();
+    }
+
+    // Text sprites
+    function makeTextSprite(text, { fontSize=64, color='#ffffff' }={}){
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const pad = 24;
+      ctx.font = `${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+      const w = Math.ceil(ctx.measureText(text).width) + pad*2;
+      const h = fontSize + pad*2;
+      canvas.width = w; canvas.height = h;
+      ctx.font = `${fontSize}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+      ctx.fillStyle = 'rgba(11,15,26,0.6)';
+      ctx.strokeStyle = 'rgba(168,198,255,0.25)';
+      ctx.lineWidth = 4;
+      roundRect(ctx, 2, 2, w-4, h-4, 12, true, true);
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'top';
+      ctx.fillText(text, pad, pad);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent:true, depthWrite:false });
+      const sprite = new THREE.Sprite(mat);
+      const s = 0.08;
+      sprite.scale.set(canvas.width*s, canvas.height*s, 1);
+      return sprite;
+    }
+    function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x+r, y); ctx.arcTo(x+w, y,   x+w, y+h, r);
+      ctx.arcTo(x+w, y+h, x,   y+h, r); ctx.arcTo(x,   y+h, x,   y,   r);
+      ctx.arcTo(x,   y,   x+w, y,   r); ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
+
+    // WebSocket
+    let ws = null;
+    let paused = false;
+    let orbit = false;
+    const wsEl = document.getElementById('wsUrl');
+    const ppsEl = document.getElementById('pps');
+    const beamsEl = document.getElementById('beams');
+    const devicesEl = document.getElementById('devices');
+    const gwsEl = document.getElementById('gws');
+    const speedEl = document.getElementById('speed');
+    const persistEl = document.getElementById('persist');
+    const minSnrEl = document.getElementById('minSnr');
+    const fportEl = document.getElementById('fport');
+    const drEl = document.getElementById('dr');
+    const wsStatusEl = document.getElementById('wsStatus');
+
+    // Overview KPI elements
+    const kpiPPSEl = document.getElementById('kpiPPS');
+    const kpiTotalEl = document.getElementById('kpiTotal');
+    const kpiDevicesEl = document.getElementById('kpiDevices');
+    const kpiGatewaysEl = document.getElementById('kpiGateways');
+    const kpiDupEl = document.getElementById('kpiDup');
+    // Live topbar KPI refs
+    const livePPSEl = document.getElementById('livePPS');
+    const liveTotalEl = document.getElementById('liveTotal');
+    const liveDevicesEl = document.getElementById('liveDevices');
+    const liveGatewaysEl = document.getElementById('liveGateways');
+    const liveDupEl = document.getElementById('liveDup');
+
+    // Set & Watch refs
+    const watchDevInput = document.getElementById('watchDevInput');
+    const watchDevBtn   = document.getElementById('watchDevBtn');
+    const nodeListSel   = document.getElementById('nodeList');
+    const tblWatchNodeBody = document.querySelector('#tblWatchNode tbody');
+    const nodeEmpty = document.getElementById('nodeEmpty');
+
+    const watchGwInput = document.getElementById('watchGwInput');
+    const watchGwBtn   = document.getElementById('watchGwBtn');
+    const gwListSel    = document.getElementById('gwList');
+    const tblWatchGwBody = document.querySelector('#tblWatchGw tbody');
+    const gwEmpty = document.getElementById('gwEmpty');
+
+    const watchDevPauseBtn = document.getElementById('watchDevPause');
+    const watchGwPauseBtn  = document.getElementById('watchGwPause');
+    let watchDevSelected = '';
+    let watchGwSelected  = '';
+    let watchDevPaused = false;
+    let watchGwPaused  = false;
+
+    // Terminal elements
+    const termStream = document.getElementById('termStream');
+    const TERM_MAX_LINES = 250;
+    function termNow(){
+      try {
+        const d = new Date();
+        return d.toLocaleTimeString([], { hour12:false });
+      } catch { return ''; }
+    }
+    function termPush(html, cls=''){
+      if (!termStream) return;
+      const line = document.createElement('div');
+      line.className = 'term-line ' + cls;
+      line.innerHTML = `<span class="term-time">${termNow()}</span>${html}`;
+      termStream.appendChild(line);
+      while (termStream.childElementCount > TERM_MAX_LINES) termStream.firstElementChild.remove();
+      termStream.scrollTop = termStream.scrollHeight;
+    }
+    function fmtVal(v){ return (v===undefined||v===null||v==='') ? '-' : String(v); }
+
+    function timeAgo(t){ if(!t) return '-'; const s = Math.max(0, (Date.now()-t)/1000|0); if(s<60) return s+"s"; const m=(s/60|0); if(m<60) return m+"m"; const h=(m/60|0); if(h<24) return h+"h"; return (h/24|0)+"d"; }
+
+    function refreshNodeRanking(){
+      const arr = Array.from(devStats.entries());
+      arr.sort((a,b)=> (b[1]?.count||0) - (a[1]?.count||0));
+      nodeListSel.innerHTML='';
+      for(const [dev, st] of arr){
+        const opt = document.createElement('option');
+        opt.value = dev; opt.textContent = `${dev}  ·  ${st.count}`;
+        nodeListSel.appendChild(opt);
+      }
+    }
+    function refreshGatewayRanking(){
+      const arr = Array.from(gwStats.entries());
+      arr.sort((a,b)=> (b[1]?.count||0) - (a[1]?.count||0));
+      gwListSel.innerHTML='';
+      for(const [gw, st] of arr){
+        const opt = document.createElement('option');
+        opt.value = gw; opt.textContent = `${gwShort(gw)}  ·  ${st.count}`;
+        gwListSel.appendChild(opt);
+      }
+    }
+
+    function renderNodeWatch(dev){
+      watchDevSelected = dev;
+      tblWatchNodeBody.innerHTML='';
+      const st = devStats.get(dev);
+      if(!st || !st.byGw || st.byGw.size===0){ nodeEmpty.style.display='block'; return; }
+      nodeEmpty.style.display='none';
+      const rows = Array.from(st.byGw.entries()).map(([gw, v])=>({gw, ...v}));
+      rows.sort((a,b)=> (b.snr??-999) - (a.snr??-999));
+      for(const r of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><span class="badge">${gwShort(r.gw)}</span></td><td>${snrCell(r.snr)}</td><td>${rssiCell(r.rssi)}</td><td>${timeAgo(r.t)}</td>`;
+        tblWatchNodeBody.appendChild(tr);
+      }
+    }
+    function renderGatewayWatch(gw){
+      // --- Gateway Watch resolver logic ---
+      const key = resolveGwKey(gw);
+      if (!key){
+        gwEmpty.style.display='block';
+        tblWatchGwBody.innerHTML='';
+        termPush(`<span class="term-warn">GW watch: no match for "${gw}"</span>`);
+        return;
+      }
+      watchGwSelected = gw;
+      // Optional debug: log which key was resolved
+      if (gw !== key) termPush(`<span class="term-kv">GW watch:</span> resolved <span class="term-kv">${gw}</span> → <span class="term-kv">${key}</span>`);
+      tblWatchGwBody.innerHTML='';
+      const st = gwStats.get(key);
+      if(!st || !st.byDev || st.byDev.size===0){ gwEmpty.style.display='block'; return; }
+      gwEmpty.style.display='none';
+      const rows = Array.from(st.byDev.entries()).map(([dev, v])=>({dev, ...v}));
+      rows.sort((a,b)=> (b.snr??-999) - (a.snr??-999));
+      for(const r of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><span class="badge">${devShort(r.dev)}</span></td><td>${snrCell(r.snr)}</td><td>${rssiCell(r.rssi)}</td><td>${timeAgo(r.t)}</td>`;
+        tblWatchGwBody.appendChild(tr);
+      }
+    }
+    function devShort(d){ return d; }
+    function gwShort(g){ return g; }
+    function devKey(x){ return x; }
+
+    // --- Gateway ID normalization & resolver ---
+    function normGw(id){ return String(id||'').toLowerCase().replace(/[^a-z0-9]/g,''); }
+    function resolveGwKey(input){
+      const q = normGw(input);
+      if (!q) return '';
+      // exact normalized match
+      for (const k of gwStats.keys()){
+        if (normGw(k) === q) return k;
+      }
+      // suffix match on normalized keys (allows last 6/8 chars etc.)
+      for (const k of gwStats.keys()){
+        if (normGw(k).endsWith(q)) return k;
+      }
+      return '';
+    }
+
+    function snrToPct(snr){
+      if (snr == null || !isFinite(snr)) return 0;
+      const pct = (snr + 15) / 27; // -15..+12 dB → 0..1
+      return Math.max(0, Math.min(1, pct)) * 100;
+    }
+    function rssiToPct(rssi){
+      if (rssi == null || !isFinite(rssi)) return 0;
+      const pct = ( -rssi - 125 ) / ( -40 - 125 ); // -125..-40 dBm → 0..1 (higher is better)
+      return Math.max(0, Math.min(1, pct)) * 100;
+    }
+    function snrCell(snr){
+      const pct = snrToPct(Number(snr));
+      const label = Number.isFinite(Number(snr)) ? Number(snr).toFixed(1) + ' dB' : '-';
+      return `<div class="gcell"><div class="gbar"><div class="gfill" style="width:${pct}%"></div></div><div class="gval">${label}</div></div>`;
+    }
+    function rssiCell(rssi){
+      const pct = rssiToPct(Number(rssi));
+      const label = Number.isFinite(Number(rssi)) ? `${rssi} dBm` : '-';
+      return `<div class="gcell"><div class="gbar"><div class="gfill" style="width:${pct}%"></div></div><div class="gval">${label}</div></div>`;
+    }
+
+    watchDevBtn.addEventListener('click', ()=>{ const d = (watchDevInput.value || nodeListSel.value || '').trim(); if(d){ renderNodeWatch(d); }});
+    watchDevInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ watchDevBtn.click(); }});
+    nodeListSel.addEventListener('change', ()=>{ watchDevInput.value=''; renderNodeWatch(nodeListSel.value); });
+
+    watchGwBtn.addEventListener('click', ()=>{
+      const raw = (watchGwInput.value || gwListSel.value || '').trim();
+      const key = resolveGwKey(raw) || raw; // try resolve; fall back to raw for first-time
+      renderGatewayWatch(key);
+    });
+    watchGwInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ watchGwBtn.click(); }});
+    gwListSel.addEventListener('change', ()=>{ watchGwInput.value=''; renderGatewayWatch(gwListSel.value); });
+
+    watchDevBtn.addEventListener('click', ()=>{ watchDevPaused = false; watchDevPauseBtn.textContent = 'Pause'; watchDevPauseBtn.setAttribute('aria-pressed','false'); });
+    watchGwBtn.addEventListener('click', ()=>{ watchGwPaused = false; watchGwPauseBtn.textContent = 'Pause'; watchGwPauseBtn.setAttribute('aria-pressed','false'); });
+    watchDevPauseBtn.addEventListener('click', ()=>{ watchDevPaused = !watchDevPaused; watchDevPauseBtn.textContent = watchDevPaused ? 'Resume' : 'Pause'; watchDevPauseBtn.setAttribute('aria-pressed', watchDevPaused ? 'true':'false'); });
+    watchGwPauseBtn.addEventListener('click', ()=>{ watchGwPaused = !watchGwPaused; watchGwPauseBtn.textContent = watchGwPaused ? 'Resume' : 'Pause'; watchGwPauseBtn.setAttribute('aria-pressed', watchGwPaused ? 'true':'false'); });
+
+    // CSV tables
+    const tblGatewayBody = document.querySelector('#tblGateway tbody');
+    const tblNodesBody = document.querySelector('#tblNodes tbody');
+    // Overview table data/state
+    let gatewayDataRaw = [];
+    let nodeDataRaw = [];
+    const gwSortState = { key: 'serving_node_count', dir: 'desc' };
+    const nodeSortState = { key: 'total', dir: 'desc' };
+
+    // Live counters for overview
+    let totalMessages = 0;
+    let smoothedPPS = 0; // EMA
+    let currentMaxDup = 0;
+
+    document.getElementById('connectBtn').onclick = () => connect(wsEl.value);
+    document.getElementById('pauseBtn').onclick = (event) => { paused = !paused; event.target.textContent = paused ? 'Resume' : 'Pause'; };
+    document.getElementById('orbitBtn').onclick = (event) => { orbit = !orbit; event.target.textContent = orbit ? 'Stop' : 'Start'; };
+
+    function connect(url){
+      if (ws) { ws.close(); ws = null; }
+      try {
+        ws = new WebSocket(url);
+        termPush('<span class="term-dim">Connecting…</span>');
+      } catch(e) {
+        console.warn('WS open error', e);
+        return;
+      }
+      ws.onopen = () => {
+        console.log('WS connected');
+        if (wsStatusEl){ wsStatusEl.textContent = 'connected'; wsStatusEl.style.color = '#85ffa3'; }
+        termPush('<span class="term-kv">WS connected</span> → <span class="term-kv">' + url + '</span>');
+      };
+      ws.onclose = () => {
+        console.log('WS closed');
+        if (wsStatusEl){ wsStatusEl.textContent = 'closed'; wsStatusEl.style.color = '#ff8585'; }
+        termPush('<span class="term-dim">WS closed</span>');
+      };
+      ws.onerror = (e) => {
+        console.warn('WS error', e);
+        if (wsStatusEl){ wsStatusEl.textContent = 'error'; wsStatusEl.style.color = '#ffb085'; }
+        termPush('<span class="term-err">WS error</span>');
+      };
+
+      ws.onmessage = (evt) => {
+        const handleText = (text) => {
+          if (!text) return;
+          if (text.startsWith('Received:')) text = text.substring('Received:'.length).trim();
+          // Terminal: show raw preview (dim)
+          const preview = text.length > 220 ? text.slice(0, 220) + ' …' : text;
+          termPush('<span class="term-dim">' + preview.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>');
+          try { handlePacket(JSON.parse(text)); return; } catch (_) {}
+          const parts = text.split(/\n+/);
+          for (const p of parts){
+            const s = p.trim();
+            if (!s) continue;
+            try { handlePacket(JSON.parse(s)); } catch (_) {}
+          }
+        };
+
+        if (typeof evt.data === 'string') {
+          handleText(evt.data.trim());
+        } else if (evt.data instanceof Blob) {
+          evt.data.text().then(t => handleText(t)).catch(err => console.warn('blob->text failed', err));
+        } else if (evt.data instanceof ArrayBuffer) {
+          try { const t = new TextDecoder('utf-8').decode(evt.data); handleText(t); } catch (e) { console.warn('ab->text failed', e); }
+        } else {
+          console.warn('Unknown WS message type', typeof evt.data);
+        }
+      };
+    }
+
+    let pktCount = 0, lastTick = performance.now();
+    function tickPPS(){
+      const now = performance.now();
+      if (now - lastTick > 1000){
+        ppsEl.textContent = pktCount.toString();
+        pktCount = 0;
+        lastTick = now;
+        // simple smoothing (EMA)
+        smoothedPPS = smoothedPPS === 0 ? Number(ppsEl.textContent) : (smoothedPPS*0.6 + Number(ppsEl.textContent)*0.4);
+        if (livePPSEl) livePPSEl.textContent = ppsEl.textContent;
+        kpiPPSEl.textContent = Math.round(smoothedPPS).toString();
+      }
+    }
+
+    function handlePacket(m){
+      if (paused) return;
+      // Terminal: summary line
+      const devS = shortDev(m.DevEui ?? m.DevAddr ?? 'unknown');
+      const ucnt = Array.isArray(m.upinfo) ? m.upinfo.length : 0;
+      let snrTxt = '-', rssiTxt = '-';
+      if (ucnt > 0){
+        const best = m.upinfo.reduce((a,b)=> (a && typeof a.snr==='number' ? a : { snr: -999, rssi: -999 }), null);
+        // compute best by SNR
+        for (const u of m.upinfo){ if (typeof u.snr === 'number' && (best.snr === undefined || u.snr > best.snr)) { best.snr = u.snr; best.rssi = u.rssi; } }
+        snrTxt = (best.snr !== undefined) ? best.snr.toFixed(1) + ' dB' : '-';
+        rssiTxt = (best.rssi !== undefined) ? best.rssi + ' dBm' : '-';
+      }
+      termPush(
+        `DEV=<span class="term-kv">${devS}</span> FPort=<span class="term-kv">${fmtVal(m.FPort)}</span> DR=<span class="term-kv">${fmtVal(m.DR)}</span> ` +
+        `GW=<span class="term-kv">${ucnt}</span> SNR=<span class="term-kv">${snrTxt}</span> RSSI=<span class="term-kv">${rssiTxt}</span>`
+      );
+      totalMessages++;
+      kpiTotalEl.textContent = totalMessages.toString();
+      if (liveTotalEl) liveTotalEl.textContent = totalMessages.toString();
+      pktCount++;
+      tickPPS();
+
+      if (fportEl.value && m.FPort != null) {
+        const allowed = fportEl.value.split(',').map(s=>s.trim()).filter(Boolean);
+        if (!allowed.includes(String(m.FPort))) return;
+      }
+      if (drEl.value && m.DR != null) {
+        const allowed = drEl.value.split(',').map(s=>s.trim()).filter(Boolean);
+        if (!allowed.includes(String(m.DR))) return;
+      }
+
+      const dev = getDeviceNode(m.DevEui ?? m.DevAddr ?? 'unknown');
+
+      if (Array.isArray(m.upinfo) && m.upinfo.length){
+        // track max duplication (how many gateways heard this packet)
+        if (m.upinfo && m.upinfo.length){
+          currentMaxDup = Math.max(currentMaxDup, m.upinfo.length);
+          kpiDupEl.textContent = currentMaxDup + '×';
+          if (liveDupEl) liveDupEl.textContent = currentMaxDup + '×';
+        }
+        const minSnr = Number(minSnrEl.value);
+        for (const u of m.upinfo){
+          const snr = typeof u.snr === 'number' ? u.snr : 0;
+          if (snr < minSnr) continue;
+          const rssi = typeof u.rssi === 'number' ? u.rssi : -110;
+          const gw = getGatewayNode(u.routerid ?? 'gw');
+          // Stats: device -> gateway
+          const devId = m.DevEui ?? m.DevAddr ?? 'unknown';
+          let ds = devStats.get(devId);
+          if(!ds){ ds = { count:0, byGw: new Map() }; devStats.set(devId, ds); }
+          ds.count++;
+          const keyGw = u.routerid ?? 'gw';
+          const gEntry = ds.byGw.get(keyGw) || {};
+          gEntry.snr = (typeof u.snr==='number') ? u.snr : gEntry.snr;
+          gEntry.rssi = (typeof u.rssi==='number') ? u.rssi : gEntry.rssi;
+          gEntry.t = Date.now();
+          ds.byGw.set(keyGw, gEntry);
+
+          // Stats: gateway -> device
+          let gs = gwStats.get(keyGw);
+          if(!gs){ gs = { count:0, byDev: new Map() }; gwStats.set(keyGw, gs); }
+          gs.count++;
+          const dEntry = gs.byDev.get(devId) || {};
+          dEntry.snr = (typeof u.snr==='number') ? u.snr : dEntry.snr;
+          dEntry.rssi = (typeof u.rssi==='number') ? u.rssi : dEntry.rssi;
+          dEntry.t = Date.now();
+          gs.byDev.set(devId, dEntry);
+
+          flashNode(dev);
+          flashNode(gw);
+          spawnBeam(dev, gw, snr, rssi, Number(persistEl.value));
+        }
+        refreshNodeRanking();
+        refreshGatewayRanking();
+        // Auto-refresh active watches unless paused
+        if (watchDevSelected && !watchDevPaused) renderNodeWatch(watchDevSelected);
+        if (watchGwSelected && !watchGwPaused) renderGatewayWatch(watchGwSelected);
+      } else {
+        const ghost = new THREE.Object3D();
+        ghost.position.copy(dev.position).add(new THREE.Vector3(0, 30, 0));
+        flashNode(dev);
+        spawnBeam(dev, ghost, 0, -100, Number(persistEl.value));
+      }
+    }
+
+    function refreshKpisFromCounts(){
+      // Keep Overview "Registered" KPIs static. Live KPIs are updated separately.
+    }
+    function updateCounts(){
+      beamsEl.textContent = String(beams.size);
+      devicesEl.textContent = String(devices.size);
+      gwsEl.textContent = String(gateways.size);
+      if (liveDevicesEl) liveDevicesEl.textContent = String(devices.size);
+      if (liveGatewaysEl) liveGatewaysEl.textContent = String(gateways.size);
+      refreshKpisFromCounts();
+    }
+
+    const clock = new THREE.Clock();
+    function animate(){
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      rings.rotation.y += 0.02 * dt;
+      stars.rotation.y += 0.002 * dt;
+
+      // If new points were added, recompute layout once
+      if (relayoutDirty){
+        relayout();
+        relayoutDirty = false;
+      }
+
+      // Ease positions toward targets for smooth transitions
+      const LERP_ALPHA = 0.08;
+      for (const g of devices.values()){
+        if (g.userData.targetPos){
+          g.position.lerp(g.userData.targetPos, LERP_ALPHA);
+        }
+      }
+      for (const g of gateways.values()){
+        if (g.userData.targetPos){
+          g.position.lerp(g.userData.targetPos, LERP_ALPHA);
+        }
+      }
+
+      // Update beams
+      for (const b of Array.from(beams)){
+        const speedScale = Number(speedEl.value);
+        b.t += dt * b.speed * speedScale * 0.6;
+        const p = b.curve.getPointAt(Math.min(1, b.t));
+        b.particle.position.copy(p);
+
+        b.life -= dt;
+        const fade = Math.max(0, b.life / b.maxLife);
+        b.line.material.opacity = 0.15 + 0.85 * fade;
+        b.particle.material.opacity = 0.35 + 0.65 * fade;
+
+        if (b.t >= 1){
+          scene.remove(b.particle);
+          b.particle.geometry.dispose(); b.particle.material.dispose();
+        }
+        if (b.life <= 0){
+          scene.remove(b.line);
+          b.line.geometry.dispose(); b.line.material.dispose();
+          beams.delete(b);
+        }
+      }
+
+      // Update flashes
+      for (const f of Array.from(flashes)){
+        f.t += dt;
+        const k = Math.min(1, f.t / f.dur);
+        const intensity = f.base + (1 - k) * (f.peak - f.base);
+        if (f.mesh && f.mesh.material) f.mesh.material.emissiveIntensity = intensity;
+        if (f.ring){
+          const s = 0.2 + k * 3.0;
+          f.ring.scale.set(s, s, 1);
+          f.ring.material.opacity = 0.9 * (1 - k);
+        }
+        if (k >= 1){
+          if (f.mesh && f.mesh.material) f.mesh.material.emissiveIntensity = f.base;
+          if (f.ring){
+            f.ring.parent && f.ring.parent.remove(f.ring);
+            f.ring.geometry.dispose();
+            f.ring.material.dispose();
+          }
+          flashes.delete(f);
+        }
+      }
+
+      // Hover pick & show label
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(pickables, false);
+      const hitGroup = hits.length ? hits[0].object.parent : null;
+      if (hitGroup !== hoveredGroup){
+        // hide previous
+        setGroupLabelVisible(hoveredGroup, false);
+        hoveredGroup = hitGroup;
+        setGroupLabelVisible(hoveredGroup, true);
+      }
+
+      if (orbit){
+        const t = performance.now()*0.0001;
+        camera.position.x = Math.cos(t)*220;
+        camera.position.z = Math.sin(t)*220;
+        camera.lookAt(0,20,0);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', ()=>{
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+
+    // --- CSV parsing & Overview data loading ---
+    async function fetchText(url){
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load ' + url);
+      return await res.text();
+    }
+    function parseCSV(text){
+      const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+      if (!lines.length) return [];
+      const hdr = lines[0].split(',').map(h=>h.trim());
+      const rows = [];
+      for (let i=1;i<lines.length;i++){
+        const raw = lines[i];
+        const cells = raw.split(',');
+        const obj = {};
+        for (let j=0;j<hdr.length && j<cells.length;j++) obj[hdr[j]] = cells[j];
+        rows.push(obj);
+      }
+      return rows;
+    }
+    function number(v, d=0){ const n = Number(String(v).replace(/[^0-9.\-]/g,'')); return isFinite(n) ? n : d; }
+
+    // ---- Overview: Sorting & Filtering ----
+    function applyGwFilters(rows){
+      const q = (document.getElementById('gwFilterText')?.value || '').toLowerCase();
+      const minU = Number(document.getElementById('gwFilterMinUnique')?.value || '');
+      const minS = Number(document.getElementById('gwFilterMinServing')?.value || '');
+      return rows.filter(r=>{
+        const gw = String(r.gateway||'').toLowerCase();
+        const u = number(r.unique_node_count, 0);
+        const s = number(r.serving_node_count, 0);
+        const passText = q ? gw.includes(q) : true;
+        const passU = isFinite(minU) && document.getElementById('gwFilterMinUnique')?.value!=='' ? u >= minU : true;
+        const passS = isFinite(minS) && document.getElementById('gwFilterMinServing')?.value!=='' ? s >= minS : true;
+        return passText && passU && passS;
+      });
+    }
+    function sortGw(rows){
+      const k = gwSortState.key; const dir = gwSortState.dir === 'asc' ? 1 : -1;
+      return rows.sort((a,b)=>{
+        if (k === 'gateway') return String(a.gateway||'').localeCompare(String(b.gateway||'')) * dir;
+        return (number(a[k],0) - number(b[k],0)) * dir;
+      });
+    }
+    function renderGatewayTable(){
+      const rows = sortGw(applyGwFilters([...gatewayDataRaw]));
+      tblGatewayBody.innerHTML = '';
+      const maxServing = rows.length ? Math.max(...rows.map(r=>number(r.serving_node_count,0))) : 0;
+      for (const r of rows){
+        const gw = r.gateway || Object.values(r)[0];
+        const uniq = number(r.unique_node_count,0);
+        const serv = number(r.serving_node_count,0);
+        const pct = maxServing>0 ? Math.round(serv/maxServing*100) : 0;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><span class="badge">${gw}</span></td><td>${uniq}</td><td>${serv}</td><td><div class="bar-row"><div class="bar-rail"><div class="bar-fill" style="width:${pct}%"></div></div><span class="muted">${pct}%</span></div></td>`;
+        tblGatewayBody.appendChild(tr);
+      }
+    }
+
+    function bindGwTableControls(){
+      const thead = document.querySelector('#tblGateway thead');
+      thead.querySelectorAll('th.sortable').forEach(th=>{
+        th.addEventListener('click', ()=>{
+          const key = th.dataset.key;
+          if (gwSortState.key === key){ gwSortState.dir = gwSortState.dir === 'asc' ? 'desc' : 'asc'; }
+          else { gwSortState.key = key; gwSortState.dir = key==='gateway' ? 'asc' : 'desc'; }
+          thead.querySelectorAll('th.sortable').forEach(x=>x.classList.remove('asc'));
+          if (gwSortState.dir==='asc') th.classList.add('asc'); else th.classList.remove('asc');
+          renderGatewayTable();
+        });
+      });
+      ['gwFilterText','gwFilterMinUnique','gwFilterMinServing'].forEach(id=>{
+        const el = document.getElementById(id); if (el) el.addEventListener('input', renderGatewayTable);
+      });
+    }
+
+    function applyNodeFilters(rows){
+      const q = (document.getElementById('nodeFilterText')?.value || '').toLowerCase();
+      const minPRR = Number(document.getElementById('nodeFilterMinPRR')?.value || '');
+      const minTotal = Number(document.getElementById('nodeFilterMinTotal')?.value || '');
+      return rows.filter(r=>{
+        const dev = String(r.dev||'').toLowerCase();
+        const prr = Number(r.prr); const total = number(r.total,0);
+        const passText = q ? dev.includes(q) : true;
+        const passP = isFinite(minPRR) && document.getElementById('nodeFilterMinPRR')?.value!=='' ? (isFinite(prr) ? prr >= minPRR : false) : true;
+        const passT = isFinite(minTotal) && document.getElementById('nodeFilterMinTotal')?.value!=='' ? total >= minTotal : true;
+        return passText && passP && passT;
+      });
+    }
+    function sortNodes(rows){
+      const k = nodeSortState.key; const dir = nodeSortState.dir === 'asc' ? 1 : -1;
+      return rows.sort((a,b)=>{
+        if (k === 'dev') return String(a.dev||'').localeCompare(String(b.dev||'')) * dir;
+        if (k === 'prr') return ((Number(a.prr)||0) - (Number(b.prr)||0)) * dir;
+        return (number(a[k],0) - number(b[k],0)) * dir;
+      });
+    }
+    function renderNodeTable(){
+      const rows = sortNodes(applyNodeFilters([...nodeDataRaw]));
+      tblNodesBody.innerHTML = '';
+      for (const r of rows){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><span class="badge">${r.dev}</span></td><td>${r.prr ?? ''}</td><td>${r.total ?? ''}</td><td class="muted">${r.updf ?? ''}</td><td class="muted">${r.upinfo ?? ''}</td>`;
+        tblNodesBody.appendChild(tr);
+      }
+    }
+    function bindNodeTableControls(){
+      const thead = document.querySelector('#tblNodes thead');
+      thead.querySelectorAll('th.sortable').forEach(th=>{
+        th.addEventListener('click', ()=>{
+          const key = th.dataset.key;
+          if (nodeSortState.key === key){ nodeSortState.dir = nodeSortState.dir === 'asc' ? 'desc' : 'asc'; }
+          else { nodeSortState.key = key; nodeSortState.dir = key==='dev' ? 'asc' : 'desc'; }
+          thead.querySelectorAll('th.sortable').forEach(x=>x.classList.remove('asc'));
+          if (nodeSortState.dir==='asc') th.classList.add('asc'); else th.classList.remove('asc');
+          renderNodeTable();
+        });
+      });
+      ['nodeFilterText','nodeFilterMinPRR','nodeFilterMinTotal'].forEach(id=>{
+        const el = document.getElementById(id); if (el) el.addEventListener('input', renderNodeTable);
+      });
+    }
+
+    async function loadGatewaySummary(){
+      try{
+        const text = await fetchText('data/gateway_node_summary.csv');
+        const rows = parseCSV(text);
+        if (!rows.length) { gatewayDataRaw = []; renderGatewayTable(); return; }
+        // normalize keys
+        gatewayDataRaw = rows.map(r=>({
+          gateway: r.gateway || Object.values(r)[0],
+          unique_node_count: number(r.unique_node_count,0),
+          serving_node_count: number(r.serving_node_count,0)
+        }));
+        bindGwTableControls();
+        renderGatewayTable();
+        // KPI: Active gateways from CSV rows count, but only if not in Overview tab
+        // Determine active tab
+        const activeTab = tabsRoot.querySelector('.tablink[aria-selected="true"]')?.dataset.tab;
+        if (activeTab !== 'overview' && kpiGatewaysEl) kpiGatewaysEl.textContent = String(gatewayDataRaw.length);
+      }catch(e){ console.warn('Gateway summary load failed', e); }
+    }
+
+    async function loadMessageDistribution(){
+      try{
+        const text = await fetchText('data/message_distribution.csv');
+        const rows = parseCSV(text);
+        if (!rows.length) { nodeDataRaw = []; renderNodeTable(); return; }
+        const totalKey = Object.keys(rows[0]).find(k=> k.toLowerCase().includes('total') ) || 'total';
+        nodeDataRaw = rows.map(r=>({
+          dev: r.DevEui || r.DEVEUI || Object.values(r)[0],
+          prr: (r.PRR ?? r.prr ?? ''),
+          total: number(r[totalKey],0),
+          updf: r.updf ?? r.UPDF ?? '',
+          upinfo: r.upinfo ?? r.UPINFO ?? ''
+        }));
+        bindNodeTableControls();
+        renderNodeTable();
+        // KPI: Active devices from CSV rows count, but only if not in Overview tab
+        const activeTab = tabsRoot.querySelector('.tablink[aria-selected="true"]')?.dataset.tab;
+        if (activeTab !== 'overview' && kpiDevicesEl) kpiDevicesEl.textContent = String(nodeDataRaw.length);
+      }catch(e){ console.warn('Message distribution load failed', e); }
+    }
+
+    async function loadOverviewData(){
+      await Promise.all([loadGatewaySummary(), loadMessageDistribution()]);
+    }
+
+    // --- Tabs logic ---
+    const tabsRoot = document.getElementById('navTabs');
+    const sections = {
+      overview: document.getElementById('tab-overview'),
+      live: document.getElementById('tab-live'),
+      watch: document.getElementById('tab-watch'),
+      uav: document.getElementById('tab-uav')
+    };
+    function activateTab(name){
+      // toggle button aria-selected
+      tabsRoot.querySelectorAll('.tablink').forEach(btn=>{
+        btn.setAttribute('aria-selected', btn.dataset.tab === name ? 'true' : 'false');
+      });
+      // show/hide sections
+      Object.entries(sections).forEach(([k,el])=>{ el.classList.toggle('active', k===name); });
+      // when switching to live, force a resize so renderer fits the visible area
+      if (name === 'live'){
+        setTimeout(()=>{
+          const w = container.clientWidth || window.innerWidth;
+          const h = container.clientHeight || window.innerHeight;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        }, 0);
+      }
+      else if (name === 'overview'){
+        loadOverviewData();
+      }
+      else if (name === 'watch'){
+        refreshNodeRanking();
+        refreshGatewayRanking();
+      }
+    }
+    tabsRoot.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.tablink');
+      if (!btn) return;
+      activateTab(btn.dataset.tab);
+    });
+    // default to Overview tab on load
+    activateTab('overview');
+    loadOverviewData();
+
+    connect(wsEl.value);
+  </script>
+</body>
+</html>

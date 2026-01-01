@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>HKUST LoRaWAN – Live 3D (Single File)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --ink:#cfe3ff; --panel:#101623; --panel-b:#ffffff14; --glow:#a8c6ff; --blue:#9fb6df; }
+    html,body{height:100%;margin:0;background:#0b0f1a;color:var(--ink);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    .shell{display:grid;grid-template-columns:260px 1fr;height:100%;}
+    aside{background:linear-gradient(180deg,#0d1423 0%,#0b1221 100%);border-right:1px solid #ffffff14;padding:16px;display:flex;flex-direction:column;gap:14px}
+    .brand{display:flex;gap:10px;align-items:center;font-weight:600;letter-spacing:.2px;color:#d4e5ff}
+    .brand svg{width:24px;height:24px}
+    .nav a{display:flex;gap:10px;align-items:center;padding:10px 8px;border-radius:10px;color:#cfe3ff;text-decoration:none;opacity:.9}
+    .nav a[aria-current="page"], .nav a:hover{background:#ffffff0f;opacity:1}
+    .nav svg{width:20px;height:20px}
+    .logo-box{margin-top:auto;opacity:.8}
+    .logo-box img{width:140px;display:block;filter:drop-shadow(0 2px 6px #0006)}
+    main{position:relative;overflow:hidden}
+    #app{position:absolute;inset:0}
+    .hud{position:absolute;top:12px;left:12px;background:rgba(16,22,35,.6);border:1px solid var(--panel-b);border-radius:10px;padding:10px 12px;backdrop-filter: blur(6px);font-size:12px}
+    .panel{position:absolute;top:12px;right:12px;background:rgba(16,22,35,.6);border:1px solid var(--panel-b);border-radius:12px;padding:12px;backdrop-filter: blur(6px);width:290px}
+    .panel h3{margin:0 0 8px 0;font-size:14px}
+    .row{display:grid;grid-template-columns:96px 1fr;align-items:center;gap:8px;margin:8px 0}
+    .row small{grid-column:1/3;opacity:.75}
+    input[type="text"], input[type="number"]{width:100%;background:#0e1628;border:1px solid #ffffff1f;border-radius:8px;padding:6px 8px;color:#e8f0ff}
+    input[type="range"]{width:100%}
+    .btn{background:#12213a;border:1px solid #25406f;color:#e2eeff;border-radius:10px;padding:7px 10px;cursor:pointer}
+    .btn:hover{background:#182a4a}
+    .legend{position:absolute;bottom:14px;left:14px;background:rgba(16,22,35,.6);border:1px solid var(--panel-b);border-radius:12px;padding:10px}
+    .grad{height:10px;background:linear-gradient(90deg,#ff3b3b 0%,#ffa540 25%,#eaff66 50%,#80ff80 75%,#5dffea 100%);border-radius:8px;margin-top:4px}
+    .grad-labels{display:flex;justify-content:space-between;font-size:11px;color:#9fb6df;margin-top:4px}
+    .live-kpis{position:absolute;top:12px;left:210px;display:flex;gap:10px}
+    .live-kpi{background:rgba(16,22,35,.6);border:1px solid var(--panel-b);border-radius:10px;padding:8px 10px;min-width:120px}
+    .live-kpi .lbl{font-size:11px;color:#9fb6df}
+    .live-kpi .val{font-size:18px;font-weight:600}
+    .term{position:absolute;bottom:12px;right:12px;width:520px;max-height:40%;display:flex;flex-direction:column;background:rgba(9,13,22,.7);border:1px solid var(--panel-b);border-radius:10px;overflow:hidden}
+    .term-header{padding:8px 10px;background:#0e1628;border-bottom:1px solid #ffffff10;font-size:12px;letter-spacing:.3px}
+    .term-body{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;padding:8px;overflow:auto}
+    .term-line{white-space:nowrap}
+    .term-time{opacity:.5;margin-right:8px}
+    .term-kv{color:#e7f1ff}
+    .term-dim{opacity:.8}
+    .term-err{color:#ffb0b0}
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div class="shell">
+    <aside role="navigation" aria-label="Main">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18 9 9 0 000-18z" stroke="#9fb6df" stroke-width="1.5"/><path d="M12 3c2.5 2.4 4 5.33 4 9s-1.5 6.6-4 9c-2.5-2.4-4-5.33-4-9s1.5-6.6 4-9z" stroke="#9fb6df" stroke-width="1.5"/><path d="M3 12h18M12 3v18" stroke="#9fb6df" stroke-width="1.2" opacity=".7"/></svg>
+        <span>HKUST LoRaWAN</span>
+      </div>
+      <div class="nav">
+        <a href="#" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-2.5 1-4.77 2.64-6.4M21 12c0 2.5-1 4.77-2.64 6.4M7 12c0-1.6.65-3.05 1.7-4.1M17 12c0 1.6-.65 3.05-1.7 4.1M10.5 12a1.5 1.5 0 103 0 1.5 1.5 0 10-3 0z" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span>Live 3D (demo)</span>
+        </a>
+      </div>
+      <div class="logo-box"><img src="WANDS_Logo.svg" alt="WANDS Logo" onerror="this.style.display='none'"/></div>
+    </aside>
+
+    <main id="live-page" class="content has-terminal" role="region" aria-label="Live Traffic">
+      <div id="app"></div>
+
+      <div class="live-kpis" aria-label="Live KPIs">
+        <div class="live-kpi"><div class="lbl">Packets/sec</div><div class="val" id="livePPS">0</div></div>
+        <div class="live-kpi"><div class="lbl">Messages (total)</div><div class="val" id="liveTotal">0</div></div>
+        <div class="live-kpi"><div class="lbl">Active devices</div><div class="val" id="liveDevices">0</div></div>
+        <div class="live-kpi"><div class="lbl">Active gateways</div><div class="val" id="liveGateways">0</div></div>
+        <div class="live-kpi"><div class="lbl">Max duplication</div><div class="val" id="liveDup">0×</div></div>
+      </div>
+
+      <div class="hud" id="hud">
+        <div><b>LoRaWAN Live 3D</b></div>
+        <div>Packets/sec: <span id="pps">0</span></div>
+        <div>Active beams: <span id="beams">0</span></div>
+        <div>Devices: <span id="devices">0</span> · Gateways: <span id="gws">0</span></div>
+        <div>WS: <span id="wsStatus">simulator</span></div>
+      </div>
+
+      <div class="panel">
+        <h3>Controls</h3>
+        <div class="row"><label>Mode</label>
+          <select id="modeSel" style="background:#0e1628;border:1px solid #ffffff1f;border-radius:8px;padding:6px 8px;color:#e8f0ff">
+            <option value="sim">Simulator (random)</option>
+            <option value="ws">WebSocket</option>
+          </select>
+        </div>
+        <div class="row"><label>WebSocket</label><input id="wsUrl" type="text" value="ws://loranet01.ust.hk:7002/owner-c::2"></div>
+        <div class="row">
+          <button class="btn" id="connectBtn">Connect</button>
+          <button class="btn" id="pauseBtn">Pause</button>
+        </div>
+        <div class="row"><label>Speed</label><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"></div>
+        <div class="row"><label>Persist</label><input id="persist" type="range" min="0.5" max="8" step="0.5" value="3"></div>
+        <div class="row"><label>Min SNR</label><input id="minSnr" type="number" value="-15" step="0.25"></div>
+        <div class="row"><label>FPort</label><input id="fport" type="text" placeholder="e.g. 1,5,8 or blank"></div>
+        <div class="row"><label>DR</label><input id="dr" type="text" placeholder="e.g. 0,2,5 or blank"></div>
+        <div class="row"><label>Orbit</label><button class="btn" id="orbitBtn">Start</button></div>
+        <div class="row"><small>Tip: thickness by RSSI, color by SNR. Curves target heard gateways from <code>upinfo</code> or a ghost if unknown.</small></div>
+      </div>
+
+      <div class="legend">
+        <div style="font-size:12px;color:#9fb6df">SNR color map</div>
+        <div class="grad"></div>
+        <div class="grad-labels"><span>-15 dB</span><span>0</span><span>+12 dB</span></div>
+      </div>
+
+      <div class="term" id="term">
+        <div class="term-header">RAW TRAFFIC • <span style="opacity:.75">simulated stream</span></div>
+        <div class="term-body" id="termStream"></div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ---------- DOM ----------
+    const container = document.getElementById('app');
+    const modeSel = document.getElementById('modeSel');
+    const wsUrlEl = document.getElementById('wsUrl');
+    const connectBtn = document.getElementById('connectBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const orbitBtn = document.getElementById('orbitBtn');
+    const speedEl = document.getElementById('speed');
+    const persistEl = document.getElementById('persist');
+    const minSnrEl = document.getElementById('minSnr');
+    const fportEl = document.getElementById('fport');
+    const drEl = document.getElementById('dr');
+    const termStream = document.getElementById('termStream');
+
+    const ppsEl = document.getElementById('pps');
+    const beamsEl = document.getElementById('beams');
+    const devicesEl = document.getElementById('devices');
+    const gwsEl = document.getElementById('gws');
+    const wsStatusEl = document.getElementById('wsStatus');
+    const livePPSEl = document.getElementById('livePPS');
+    const liveTotalEl = document.getElementById('liveTotal');
+    const liveDevicesEl = document.getElementById('liveDevices');
+    const liveGatewaysEl = document.getElementById('liveGateways');
+    const liveDupEl = document.getElementById('liveDup');
+
+    // ---------- Three.js ----------
+    const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 3000);
+    camera.position.set(0, 120, 260);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.HemisphereLight(0x7aa1ff, 0x0b0f1a, 0.7));
+    const dir = new THREE.DirectionalLight(0xb1c8ff, 0.9);
+    dir.position.set(150, 220, 120); scene.add(dir);
+
+    // ---------- “HKUST Map” pad (placeholder) ----------
+    const pad = new THREE.Group(); scene.add(pad);
+    // ground
+    const g = new THREE.PlaneGeometry(520, 380, 1, 1);
+    const m = new THREE.MeshStandardMaterial({ color:0x0f1a2d, metalness:0.1, roughness:0.9 });
+    const ground = new THREE.Mesh(g, m); ground.rotation.x = -Math.PI/2; pad.add(ground);
+    // outline
+    const border = new THREE.Mesh(new THREE.RingGeometry(250, 255, 128), new THREE.MeshBasicMaterial({ color:0x1e2c49, side:THREE.DoubleSide, transparent:true, opacity:0.6 }));
+    border.rotation.x = -Math.PI/2; pad.add(border);
+    // grid
+    const grid = new THREE.GridHelper(520, 26, 0x1e2c49, 0x15213a); grid.position.y = 0.05; pad.add(grid);
+    // title
+    function labelSprite(txt){
+      const c = document.createElement('canvas'); const ctx = c.getContext('2d'); const fs = 72, pad = 20;
+      ctx.font = `${fs}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+      const w = Math.ceil(ctx.measureText(txt).width)+pad*2, h=fs+pad*2; c.width=w; c.height=h;
+      ctx.font = `${fs}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+      ctx.fillStyle = 'rgba(11,15,26,0.65)'; ctx.strokeStyle = 'rgba(168,198,255,0.25)'; ctx.lineWidth = 6;
+      roundRect(ctx,3,3,w-6,h-6,18,true,true);
+      ctx.fillStyle = '#e7f0ff'; ctx.textBaseline='top'; ctx.fillText(txt,pad,pad);
+      const tex = new THREE.CanvasTexture(c); tex.minFilter=THREE.LinearFilter;
+      const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false }));
+      const s=0.22; spr.scale.set(w*s,h*s,1); return spr;
+    }
+    function roundRect(ctx,x,y,w,h,r,fill,stroke){ if(w<2*r)r=w/2; if(h<2*r)r=h/2; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); if(fill)ctx.fill(); if(stroke)ctx.stroke();}
+    const title = labelSprite('HKUST Campus • 3D Demo'); title.position.set(0, 0.1, -170); pad.add(title);
+
+    // ---------- Starfield ----------
+    const starsGeo = new THREE.BufferGeometry();
+    const starCnt = 1200; const starPos = new Float32Array(starCnt*3);
+    for(let i=0;i<starCnt;i++){ const r=800*Math.cbrt(Math.random()); const t=Math.random()*Math.PI*2; const p=Math.acos(2*Math.random()-1);
+      starPos[i*3] = r*Math.sin(p)*Math.cos(t);
+      starPos[i*3+1] = r*Math.cos(p);
+      starPos[i*3+2] = r*Math.sin(p)*Math.sin(t);
+    }
+    starsGeo.setAttribute('position', new THREE.BufferAttribute(starPos,3));
+    const stars = new THREE.Points(starsGeo,new THREE.PointsMaterial({ size:1, sizeAttenuation:true, color:0x385a94, fog:false })); scene.add(stars);
+
+    // ---------- Entities ----------
+    const devices = new Map();  // key: DevEUI
+    const gateways = new Map(); // key: routerid
+    const pickables = [];
+    const flashes = new Set();
+    const beams = new Set();
+    let currentMaxDup = 0;
+
+    // random placement region (roughly map extents)
+    const REGION = { minX:-240, maxX:240, minZ:-180, maxZ:180, y:0 };
+
+    function randInRegion(){ 
+      return new THREE.Vector3(
+        THREE.MathUtils.lerp(REGION.minX, REGION.maxX, Math.random()),
+        REGION.y,
+        THREE.MathUtils.lerp(REGION.minZ, REGION.maxZ, Math.random())
+      );
+    }
+
+    const deviceMatTpl  = new THREE.MeshStandardMaterial({ color:0x8ab4ff, emissive:0x2b5dd1, emissiveIntensity:1.2, metalness:0.2, roughness:0.3 });
+    function makeNode(devEui){
+      if (devices.has(devEui)) return devices.get(devEui);
+      const group = new THREE.Group();
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(2.2,24,24), deviceMatTpl.clone());
+      mesh.material.emissiveIntensity = 1.35;
+      group.add(mesh);
+      group.userData.coreMesh = mesh;
+      mesh.userData.baseEm = mesh.material.emissiveIntensity;
+      const label = tagSprite(`Node: ${short(devEui)}`, '#a9c7ff'); label.position.set(0,8,0); label.visible=false; group.add(label);
+      group.userData.kind='node';
+      group.position.copy(randInRegion());
+      scene.add(group);
+      devices.set(devEui, group);
+      pickables.push(mesh);
+      updateCounts();
+      return group;
+    }
+
+    function makeGateway(routerid){
+      if (gateways.has(routerid)) return gateways.get(routerid);
+      const group = new THREE.Group();
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,14,16), new THREE.MeshStandardMaterial({ color:0xffc58a, emissive:0x8a5320, emissiveIntensity:1.0, metalness:0.45, roughness:0.25 }));
+      mast.position.y = 7; group.add(mast);
+      const rmat = new THREE.MeshBasicMaterial({ color:0xffd9a8, transparent:true, opacity:0.9 });
+      const a1 = new THREE.Mesh(new THREE.TorusGeometry(2.6,0.15,12,48), rmat); a1.rotation.x=Math.PI/2; a1.position.y = mast.position.y + 3.2; group.add(a1);
+      const a2 = new THREE.Mesh(new THREE.TorusGeometry(1.6,0.15,12,48), rmat); a2.rotation.x=Math.PI/2; a2.position.y = mast.position.y + 1.4; group.add(a2);
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.6,16,16), new THREE.MeshBasicMaterial({ color:0xffa64d })); led.position.y = mast.position.y + 5.2; group.add(led);
+      const label = tagSprite(`Gateway: ${short(routerid)}`, '#ffc97a'); label.position.set(0,12,0); label.visible=false; group.add(label);
+      group.userData.coreMesh = mast; mast.userData.baseEm = mast.material.emissiveIntensity; group.userData.kind='gateway';
+      group.position.copy(randInRegion());
+      scene.add(group);
+      gateways.set(routerid, group);
+      pickables.push(mast);
+      updateCounts();
+      return group;
+    }
+
+    function tagSprite(text, color){
+      const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const pad=24, fs=52;
+      ctx.font = `${fs}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+      const w = Math.ceil(ctx.measureText(text).width) + pad*2, h = fs + pad*2; canvas.width=w; canvas.height=h;
+      ctx.font = `${fs}px ui-sans-serif, system-ui, -apple-system, Segoe UI`;
+      ctx.fillStyle='rgba(11,15,26,0.6)'; ctx.strokeStyle='rgba(168,198,255,0.25)'; ctx.lineWidth=4;
+      roundRect(ctx,2,2,w-4,h-4,12,true,true);
+      ctx.fillStyle=color; ctx.textBaseline='top'; ctx.fillText(text,pad,pad);
+      const tex = new THREE.CanvasTexture(canvas); tex.minFilter = THREE.LinearFilter;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true, depthWrite:false }));
+      const s=0.08; sprite.scale.set(w*s,h*s,1);
+      return sprite;
+    }
+
+    function short(id){ return String(id).slice(-8); }
+
+    // ---------- Visual effects ----------
+    function snrToColor(snr){
+      const t = THREE.MathUtils.clamp((snr + 15) / 27, 0, 1);
+      const c = new THREE.Color();
+      if (t < 0.5){ const k=t/0.5; c.setRGB(1, 0.23 + 0.77*k, 0.23*(1-k)); }
+      else { const k=(t-0.5)/0.5; c.setRGB(1-0.7*k, 1, 0.23*(1-k)); }
+      return c;
+    }
+    function rssiToWidth(rssi){
+      const t = THREE.MathUtils.clamp(((-rssi)-40)/(125-40), 0, 1);
+      return 0.3 + 2.7*(1-t);
+    }
+    function flash(group){
+      const mesh = group.userData.coreMesh; if(!mesh) return;
+      const base = mesh.userData.baseEm ?? 1.0, peak = base + 1.0, dur=0.6;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.1,0.65,48), new THREE.MeshBasicMaterial({ color:0x9ec3ff, transparent:true, opacity:0.9, side:THREE.DoubleSide, fog:false }));
+      ring.rotation.x = -Math.PI/2; ring.position.set(0, 0.05, 0); group.add(ring);
+      flashes.add({ mesh, base, peak, t:0, dur, ring });
+    }
+    function spawnBeam(from, to, snr, rssi, life){
+      const a = from.position.clone(), b = to.position.clone();
+      const mid = a.clone().add(b).multiplyScalar(0.5);
+      const dist = a.distanceTo(b); mid.y += 10 + 0.25*dist;
+      const curve = new THREE.CatmullRomCurve3([a, mid, b]);
+      const points = curve.getPoints(64);
+      const pos = new Float32Array(points.length*3);
+      for(let i=0;i<points.length;i++){ pos[i*3]=points[i].x; pos[i*3+1]=points[i].y; pos[i*3+2]=points[i].z; }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: snrToColor(snr), transparent:true, opacity:1.0, fog:false }));
+      scene.add(line);
+      const p = new THREE.Mesh(new THREE.SphereGeometry(rssiToWidth(rssi)*0.25,12,12), new THREE.MeshBasicMaterial({ color: snrToColor(snr), fog:false }));
+      p.scale.set(1.6,1.6,1.6); p.position.copy(a); scene.add(p);
+      const beam = { line, particle:p, curve, t:0, speed:0.6*Number(speedEl.value), life, maxLife:life };
+      beams.add(beam); updateCounts();
+    }
+
+    // ---------- Picking ----------
+    const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(); let hovered = null;
+    function setLabel(group, vis){ if(!group) return; const sprite = group.children.find(c=>c.isSprite); if(sprite) sprite.visible = vis; }
+    renderer.domElement.addEventListener('mousemove', (e)=>{
+      const r = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    });
+
+    // ---------- Terminal / KPIs ----------
+    let totalMessages = 0, pktCount=0, lastTick=performance.now();
+    function termNow(){ try{ return new Date().toLocaleTimeString([],{hour12:false}); } catch { return ''; } }
+    function termPush(html, cls=''){ const line=document.createElement('div'); line.className='term-line '+cls; line.innerHTML=`<span class="term-time">${termNow()}</span>${html}`;
+      termStream.appendChild(line); while(termStream.childElementCount>250) termStream.firstElementChild.remove(); termStream.scrollTop=termStream.scrollHeight; }
+    function fmt(v){ return (v===undefined||v===null||v==='')?'-':String(v); }
+    function updateCounts(){
+      beamsEl.textContent = String(beams.size);
+      devicesEl.textContent = String(devices.size);
+      gwsEl.textContent = String(gateways.size);
+      liveDevicesEl.textContent = String(devices.size);
+      liveGatewaysEl.textContent = String(gateways.size);
+    }
+    function tickPPS(){
+      const now = performance.now();
+      if (now - lastTick > 1000){
+        ppsEl.textContent = String(pktCount);
+        livePPSEl.textContent = String(pktCount);
+        pktCount = 0; lastTick = now;
+      }
+    }
+
+    // ---------- Simulator / WS ----------
+    let paused=false, orbit=false, simTimer=null, ws=null;
+    function simulatorStart(){
+      stopStreams();
+      wsStatusEl.textContent = 'simulator';
+      // bootstrap random population
+      if (gateways.size===0){
+        const gwN = 18 + Math.floor(Math.random()*10);
+        for(let i=0;i<gwN;i++) makeGateway('gw_'+(1000+i));
+      }
+      if (devices.size===0){
+        const dN = 120 + Math.floor(Math.random()*80);
+        for(let i=0;i<dN;i++) makeNode('dev_'+(100000+i));
+      }
+      simTimer = setInterval(()=>{
+        if (paused) return;
+        // choose a random device & 1..k gateways that "hear" it
+        const devKeys = Array.from(devices.keys());
+        const gwKeys  = Array.from(gateways.keys());
+        const devKey  = devKeys[Math.floor(Math.random()*devKeys.length)];
+        const upCount = 1 + Math.floor(Math.random()*Math.min(5, gwKeys.length));
+        const chosen  = shuffle(gwKeys).slice(0, upCount);
+        // fabricate radio stats
+        const baseSnr = -8 + Math.random()*18; // -8..10
+        const ups = chosen.map((rid,i)=>({ routerid: rid, snr: baseSnr + (Math.random()*6-3), rssi: -90 + Math.random()*30 }));
+        const pkt = {
+          DevEui: devKey, FPort: [1,5,8,10][Math.floor(Math.random()*4)],
+          DR: [0,2,3,5][Math.floor(Math.random()*4)], upinfo: ups
+        };
+        handlePacket(pkt, true);
+      }, 120);
+    }
+    function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+
+    function connect(url){
+      stopStreams();
+      try{ ws = new WebSocket(url); wsStatusEl.textContent='connecting'; termPush('<span class="term-dim">Connecting…</span>'); }
+      catch(e){ wsStatusEl.textContent='error'; termPush('<span class="term-err">WS open error</span>'); return; }
+      ws.onopen = ()=>{ wsStatusEl.textContent='connected'; termPush(`<span class="term-kv">WS connected</span> → <span class="term-kv">${url}</span>`); };
+      ws.onclose = ()=>{ wsStatusEl.textContent='closed'; termPush('<span class="term-dim">WS closed</span>'); };
+      ws.onerror = ()=>{ wsStatusEl.textContent='error'; termPush('<span class="term-err">WS error</span>'); };
+      ws.onmessage = (evt)=>{
+        const textHandler = (text)=>{
+          if(!text) return;
+          if (text.startsWith('Received:')) text = text.substring('Received:'.length).trim();
+          const preview = text.length>220? text.slice(0,220)+' …' : text;
+          termPush('<span class="term-dim">'+preview.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>');
+          try{ handlePacket(JSON.parse(text)); return; }catch(_){}
+          text.split(/\n+/).forEach(s=>{ try{ handlePacket(JSON.parse(s)); }catch(_){ }});
+        };
+        if (typeof evt.data==='string') textHandler(evt.data.trim());
+        else if (evt.data instanceof Blob) evt.data.text().then(textHandler);
+        else if (evt.data instanceof ArrayBuffer){ try{ textHandler(new TextDecoder('utf-8').decode(evt.data)); }catch{} }
+      };
+    }
+    function stopStreams(){
+      if (simTimer){ clearInterval(simTimer); simTimer=null; }
+      if (ws){ try{ ws.close(); }catch{} ws=null; }
+    }
+
+    // ---------- Packet handling ----------
+    function bestUp(arr){ if(!Array.isArray(arr)||!arr.length) return null; let best={snr:-999,rssi:-999}; for(const u of arr){ if(typeof u.snr==='number' && u.snr>best.snr) best={snr:u.snr,rssi:u.rssi}; } return best; }
+    function handlePacket(m, fromSim=false){
+      if (paused) return;
+      const ucnt = Array.isArray(m.upinfo)? m.upinfo.length : 0;
+      const best = bestUp(m.upinfo);
+      const snrTxt = best?.snr!==undefined ? best.snr.toFixed(1)+' dB' : '-';
+      const rssiTxt = best?.rssi!==undefined ? best.rssi+' dBm' : '-';
+      const devS = (m.DevEui ?? m.DevAddr ?? 'unknown');
+      termPush(`DEV=<span class="term-kv">${String(devS).slice(-8)}</span> FPort=<span class="term-kv">${fmt(m.FPort)}</span> DR=<span class="term-kv">${fmt(m.DR)}</span> GW=<span class="term-kv">${ucnt}</span> SNR=<span class="term-kv">${snrTxt}</span> RSSI=<span class="term-kv">${rssiTxt}</span>`);
+      totalMessages++; liveTotalEl.textContent = String(totalMessages); pktCount++; tickPPS();
+
+      // filters
+      if (fportEl.value && m.FPort!=null){
+        const allowed = fportEl.value.split(',').map(s=>s.trim()).filter(Boolean);
+        if (!allowed.includes(String(m.FPort))) return;
+      }
+      if (drEl.value && m.DR!=null){
+        const allowed = drEl.value.split(',').map(s=>s.trim()).filter(Boolean);
+        if (!allowed.includes(String(m.DR))) return;
+      }
+
+      const dev = makeNode(devS);
+      if (Array.isArray(m.upinfo) && m.upinfo.length){
+        currentMaxDup = Math.max(currentMaxDup, m.upinfo.length); liveDupEl.textContent = currentMaxDup+'×';
+        const minSnr = Number(minSnrEl.value);
+        for(const u of m.upinfo){
+          const snr = Number(u.snr ?? 0); if (snr < minSnr) continue;
+          const rssi = Number(u.rssi ?? -100);
+          const gw = makeGateway(u.routerid ?? ('gw_'+Math.floor(Math.random()*9999)));
+          flash(dev); flash(gw);
+          spawnBeam(dev, gw, snr, rssi, Number(persistEl.value));
+        }
+      } else {
+        const ghost = new THREE.Object3D(); ghost.position.copy(dev.position).add(new THREE.Vector3(0, 30, 0));
+        flash(dev); spawnBeam(dev, ghost, 0, -100, Number(persistEl.value));
+      }
+    }
+
+    // ---------- Animate ----------
+    const clock = new THREE.Clock();
+    function animate(){
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      stars.rotation.y += 0.002*dt;
+      grid.rotation.z += 0.0005*dt;
+
+      // beams
+      for (const b of Array.from(beams)){
+        const speedScale = Number(speedEl.value);
+        const dtLocal = dt * b.speed * speedScale * 0.6;
+        b.t += dtLocal;
+        const p = b.curve.getPointAt(Math.min(1,b.t));
+        b.particle.position.copy(p);
+        b.life -= dt;
+        const fade = Math.max(0, b.life / b.maxLife);
+        b.line.material.opacity = 0.15 + 0.85*fade;
+        b.particle.material.opacity = 0.35 + 0.65*fade;
+
+        if (b.t >= 1){ scene.remove(b.particle); b.particle.geometry.dispose(); b.particle.material.dispose(); }
+        if (b.life <= 0){ scene.remove(b.line); b.line.geometry.dispose(); b.line.material.dispose(); beams.delete(b); }
+      }
+
+      // flashes
+      for (const f of Array.from(flashes)){
+        f.t += dt; const k = Math.min(1, f.t/f.dur);
+        const intensity = f.base + (1-k)*(f.peak - f.base);
+        if (f.mesh?.material) f.mesh.material.emissiveIntensity = intensity;
+        if (f.ring){ const s = 0.2 + k*3.0; f.ring.scale.set(s,s,1); f.ring.material.opacity = 0.9*(1-k); }
+        if (k>=1){
+          if (f.mesh?.material) f.mesh.material.emissiveIntensity = f.base;
+          if (f.ring){ f.ring.parent?.remove(f.ring); f.ring.geometry.dispose(); f.ring.material.dispose(); }
+          flashes.delete(f);
+        }
+      }
+
+      // hover labels
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(pickables, false);
+      const hitGroup = hits.length ? hits[0].object.parent : null;
+      if (hitGroup !== hovered){ setLabel(hovered,false); hovered = hitGroup; setLabel(hovered,true); }
+
+      if (orbit){ const t = performance.now()*0.00009; camera.position.x = Math.cos(t)*280; camera.position.z = Math.sin(t)*280; camera.lookAt(0,20,0); }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', ()=>{
+      const w = container.clientWidth || window.innerWidth, h = container.clientHeight || window.innerHeight;
+      camera.aspect = w/h; camera.updateProjectionMatrix(); renderer.setSize(w,h);
+    });
+
+    // ---------- UI wiring ----------
+    connectBtn.onclick = ()=>{
+      if (modeSel.value === 'ws') connect(wsUrlEl.value);
+      else simulatorStart();
+    };
+    pauseBtn.onclick = (e)=>{ paused = !paused; e.target.textContent = paused ? 'Resume' : 'Pause'; };
+    orbitBtn.onclick = (e)=>{ orbit = !orbit; e.target.textContent = orbit ? 'Stop' : 'Start'; };
+    modeSel.onchange = ()=>{
+      stopStreams();
+      wsStatusEl.textContent = (modeSel.value==='ws') ? 'idle' : 'simulator';
+      document.querySelector('.term-header').innerHTML = `RAW TRAFFIC • <span style="opacity:.75">${modeSel.value==='ws'?'websocket':'simulated stream'}</span>`;
+    };
+
+    // start in simulator for instant visuals
+    simulatorStart();
+  </script>
+</body>
+</html>

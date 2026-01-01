@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>HKUST LoRaWAN – Live Traffic</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<!-- SVG Mask Controls (optional) -->
+<div id="svgControls" style="position:fixed; right:12px; bottom:12px; background:rgba(11,15,26,0.7); border:1px solid rgba(168,198,255,0.25); padding:10px 12px; border-radius:8px; color:#e9f0ff; font:13px ui-sans-serif, system-ui; z-index:9999;">
+  <div style="margin-bottom:6px; font-weight:600;">SVG Mask</div>
+  <label>Scale
+    <input id="svgScale" type="range" min="0.2" max="3.0" step="0.01" value="1.0" style="width:180px; margin-left:6px;">
+  </label>
+  <div style="display:grid; grid-template-columns:auto 1fr; gap:6px 8px; margin-top:8px; align-items:center;">
+    <label for="svgOffsetX">Offset X</label> <input id="svgOffsetX" type="range" min="-400" max="400" step="1" value="0">
+    <label for="svgOffsetY">Offset Y</label> <input id="svgOffsetY" type="range" min="-50" max="50" step="1" value="0">
+    <label for="svgOffsetZ">Offset Z</label> <input id="svgOffsetZ" type="range" min="-400" max="400" step="1" value="0">
+  </div>
+  <div style="margin-top:8px; display:flex; gap:12px; align-items:center;">
+    <label><input id="svgFlipX" type="checkbox"> Flip X</label>
+    <label><input id="svgFlipY" type="checkbox"> Flip Y</label>
+  </div>
+  <div style="margin-top:8px;">
+  <label><input id="svgMaskVisible" type="checkbox" checked> Show mask</label>
+</div>
+</div>
+<body>
+  <aside class="sidebar" role="navigation" aria-label="Main">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18 9 9 0 000-18z" stroke="#9fb6df" stroke-width="1.5"/><path d="M12 3c2.5 2.4 4 5.33 4 9s-1.5 6.6-4 9c-2.5-2.4-4-5.33-4-9s1.5-6.6 4-9z" stroke="#9fb6df" stroke-width="1.5"/><path d="M3 12h18M12 3v18" stroke="#9fb6df" stroke-width="1.2" opacity=".7"/></svg>
+      <span>HKUST LoRaWAN</span>
+    </div>
+    <div class="nav">
+      <a href="index.html">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v7H4z" stroke="#a8c6ff" stroke-width="1.5"/></svg>
+        <span>Overview</span>
+      </a>
+      <a href="live.html" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-2.5 1-4.77 2.64-6.4M21 12c0 2.5-1 4.77-2.64 6.4M7 12c0-1.6.65-3.05 1.7-4.1M17 12c0 1.6-.65 3.05-1.7 4.1M10.5 12a1.5 1.5 0 103 0 1.5 1.5 0 10-3 0z" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Live Traffic</span>
+      </a>
+      <a href="watch.html">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="#a8c6ff" stroke-width="1.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M12 9v6M9 12h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Set &amp; Watch</span>
+      </a>
+      <a href="uav.html">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 12a4 4 0 118 0 4 4 0 11-8 0z" stroke="#a8c6ff" stroke-width="1.5"/><path d="M2 7h6M16 7h6M2 17h6M16 17h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/><path d="M4 7l3 3M20 7l-3 3M4 17l3-3M20 17l-3-3" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>UAV Monitoring</span>
+      </a>
+    </div>
+    <div class="logo-box"><img src="WANDS_Logo.svg" alt="WANDS Logo" /></div>
+  </aside>
+
+  <main id="live-page" class="content has-terminal" role="region" aria-label="Live Traffic">
+    <div class="term" id="term">
+      <div class="term-header">RAW TRAFFIC • <span style="opacity:.75">live stream</span></div>
+      <div class="term-body" id="termStream"></div>
+      <div class="term-scan"></div>
+    </div>
+    <div class="live-kpis" aria-label="Live KPIs">
+      <div class="live-kpi"><div class="lbl">Packets/sec</div><div class="val" id="livePPS">0</div></div>
+      <div class="live-kpi"><div class="lbl">Messages (total)</div><div class="val" id="liveTotal">0</div></div>
+      <div class="live-kpi"><div class="lbl">Active devices</div><div class="val" id="liveDevices">0</div></div>
+      <div class="live-kpi"><div class="lbl">Active gateways</div><div class="val" id="liveGateways">0</div></div>
+      <div class="live-kpi"><div class="lbl">Max duplication</div><div class="val" id="liveDup">0×</div></div>
+    </div>
+    <div id="app"></div>
+
+    <div class="hud" id="hud">
+      <div><b>LoRaWAN Live 3D</b></div>
+      <div>Packets/sec: <span id="pps">0</span></div>
+      <div>Active beams: <span id="beams">0</span></div>
+      <div>Devices: <span id="devices">0</span> · Gateways: <span id="gws">0</span></div>
+      <div>WS: <span id="wsStatus">disconnected</span></div>
+    </div>
+
+    <div class="panel">
+      <h3>Controls</h3>
+      <div class="row"><label>WebSocket</label><input id="wsUrl" type="text" value="ws://loranet01.ust.hk:7002/owner-c::2"></div>
+      <div class="row">
+        <button class="btn" id="connectBtn">Connect</button>
+        <button class="btn" id="pauseBtn">Pause</button>
+      </div>
+      <div class="row"><label>Speed</label><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"></div>
+      <div class="row"><label>Persist</label><input id="persist" type="range" min="0.5" max="8" step="0.5" value="3"></div>
+      <div class="row"><label>Min SNR</label><input id="minSnr" type="number" value="-15" step="0.25"></div>
+      <div class="row"><label>FPort</label><input id="fport" type="text" placeholder="e.g. 1,5,8 or blank"></div>
+      <div class="row"><label>DR</label><input id="dr" type="text" placeholder="e.g. 0,2,5 or blank"></div>
+      <div class="row"><label>Orbit</label><button class="btn" id="orbitBtn">Start</button></div>
+      <div class="row"><small>Tip: thickness by RSSI, color by SNR. Curves target heard gateways from <code>upinfo</code> or <code>updf</code> origin.</small></div>
+    </div>
+
+    <div class="legend">
+      <div>
+        <div style="font-size:12px;color:#9fb6df">SNR color map</div>
+        <div class="grad"></div>
+        <div class="grad-labels"><span>-15 dB</span><span>0</span><span>+12 dB</span></div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import './js/live.js';
+  </script>
+  <script src="https://unpkg.com/mqtt@5.8.0/dist/mqtt.min.js"></script>
+</body>
+</html>

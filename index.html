@@ -1,0 +1,101 @@
+<!-- index.html - Main page for the HKUST LoRaWAN Dashboard -->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>HKUST LoRaWAN – Overview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="sidebar" role="navigation" aria-label="Main">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3a9 9 0 100 18 9 9 0 000-18z" stroke="#9fb6df" stroke-width="1.5"/><path d="M12 3c2.5 2.4 4 5.33 4 9s-1.5 6.6-4 9c-2.5-2.4-4-5.33-4-9s1.5-6.6 4-9z" stroke="#9fb6df" stroke-width="1.5"/><path d="M3 12h18M12 3v18" stroke="#9fb6df" stroke-width="1.2" opacity=".7"/></svg>
+      <span>HKUST LoRaWAN</span>
+    </div>
+    <div class="nav" id="navTabs">
+      <a href="index.html" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6v7H4zM14 4h6v16h-6zM4 4h6v7H4z" stroke="#a8c6ff" stroke-width="1.5"/></svg>
+        <span>Overview</span>
+      </a>
+      <a href="live.html">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 12c0-2.5 1-4.77 2.64-6.4M21 12c0 2.5-1 4.77-2.64 6.4M7 12c0-1.6.65-3.05 1.7-4.1M17 12c0 1.6-.65 3.05-1.7 4.1M10.5 12a1.5 1.5 0 103 0 1.5 1.5 0 10-3 0z" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Live Traffic</span>
+      </a>
+      <a href="watch.html">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" stroke="#a8c6ff" stroke-width="1.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M12 9v6M9 12h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>Set & Watch</span>
+      </a>
+      <a href="uav.html">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 12a4 4 0 118 0 4 4 0 11-8 0z" stroke="#a8c6ff" stroke-width="1.5"/><path d="M2 7h6M16 7h6M2 17h6M16 17h6" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/><path d="M4 7l3 3M20 7l-3 3M4 17l3-3M20 17l-3-3" stroke="#a8c6ff" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>UAV Monitoring</span>
+      </a>
+    </div>
+    <div class="logo-box"><img src="WANDS_Logo.svg" alt="WANDS Logo" /></div>
+  </aside>
+
+  <main class="content">
+    <div class="dash-wrap">
+      <h2 style="margin:0 0 12px 0; letter-spacing:.3px; color:#a8c6ff">Overview</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Live traffic (pps)</div><div class="value" id="kpiPPS">0</div></div>
+        <div class="kpi"><div class="label">Live messages (total)</div><div class="value" id="kpiTotal">0</div></div>
+        <div class="kpi"><div class="label">Registered devices</div><div class="value" id="kpiDevices">2231</div></div>
+        <div class="kpi"><div class="label">Registered gateways</div><div class="value" id="kpiGateways">98</div></div>
+        <div class="kpi"><div class="label">Max duplication (1 Day)</div><div class="value" id="kpiDup">0×</div></div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Gateway load</h3>
+          <table class="table" id="tblGateway">
+            <thead>
+              <tr>
+                <th class="sortable" data-key="gateway">Gateway</th>
+                <th class="sortable" data-key="unique_node_count">Unique Nodes</th>
+                <th class="sortable" data-key="serving_node_count">Serving Nodes</th>
+                <th>Load</th>
+              </tr>
+              <tr class="filter-row">
+                <th><input id="gwFilterText" placeholder="Filter gateway"></th>
+                <th><input id="gwFilterMinUnique" type="number" placeholder=">= 0"></th>
+                <th><input id="gwFilterMinServing" type="number" placeholder=">= 0"></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Node message distribution</h3>
+          <table class="table" id="tblNodes">
+            <thead>
+              <tr>
+                <th class="sortable" data-key="dev">DevEui</th>
+                <th class="sortable" data-key="prr">PRR</th>
+                <th class="sortable" data-key="total">Total</th>
+                <th class="sortable" data-key="updf">updf</th>
+                <th class="sortable" data-key="upinfo">upinfo</th>
+              </tr>
+              <tr class="filter-row">
+                <th><input id="nodeFilterText" placeholder="Filter DevEUI"></th>
+                <th><input id="nodeFilterMinPRR" type="number" step="0.1" placeholder=">= 0"></th>
+                <th><input id="nodeFilterMinTotal" type="number" placeholder=">= 0"></th>
+                <th></th><th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { fetchText, parseCSV, number } from './js/common.js';
+    import './js/overview.js';
+  </script>
+</body>
+</html>
